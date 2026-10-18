@@ -12,7 +12,9 @@ const dataDir =
   process.env.BCENTER_DATA_DIR ??
   join(process.env.LOCALAPPDATA ?? app.getPath('appData'), isDemo ? 'BCenter-demo' : 'BCenter')
 
-app.setPath('userData', join(dataDir, 'webdata'))
+// En développement, un profil web distinct : `npm run dev` démarre même si la version installée est ouverte
+// (sinon le verrou d'instance unique ferme la copie de développement), tout en partageant la configuration.
+app.setPath('userData', join(dataDir, app.isPackaged ? 'webdata' : 'webdata-dev'))
 app.setAppUserModelId('com.bcenter.app')
 
 let engine: Engine | null = null
