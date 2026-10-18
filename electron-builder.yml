@@ -1,4 +1,6 @@
 appId: com.bcenter.app
+# ssh2 works without its optional native addons: skip native rebuilds (no build tools needed).
+npmRebuild: false
 productName: BCenter
 directories:
   buildResources: build
