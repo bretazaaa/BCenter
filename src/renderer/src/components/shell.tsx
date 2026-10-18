@@ -1,5 +1,5 @@
 import {
-  Activity, Bell, CheckCircle2, Copy, Info, LayoutDashboard, Minus, Monitor, Network, Plus, RefreshCw, ScrollText,
+  Activity, Bell, CheckCircle2, Copy, HardDrive, Info, LayoutDashboard, Minus, Monitor, Network, Plus, RefreshCw, ScrollText,
   Search, Settings, Square, Terminal, Wrench, X, XCircle,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -49,6 +49,7 @@ export function TitleBar({ simple = false, onAddServer }: { simple?: boolean; on
         <>
           <Menu label="Infrastructure" items={[
             { label: 'Ajouter un serveur Proxmox…', action: () => onAddServer?.() },
+            { label: 'NAS', kbd: 'Ctrl+5', action: () => navigate('nas') },
             { label: 'Actualiser', kbd: 'F5', action: () => void refresh() },
             'sep',
             { label: 'Quitter BCenter', action: () => void api.quit() },
@@ -82,6 +83,7 @@ export function TitleBar({ simple = false, onAddServer }: { simple?: boolean; on
 const NAV: { page: Page; label: string; icon: ReactNode }[] = [
   { page: 'dashboard', label: 'Tableau de bord', icon: <LayoutDashboard size={17} /> },
   { page: 'infrastructure', label: 'Infrastructure', icon: <Network size={17} /> },
+  { page: 'nas', label: 'NAS', icon: <HardDrive size={17} /> },
   { page: 'guests', label: 'VM / LXC', icon: <Monitor size={17} /> },
   { page: 'updates', label: 'Mises à jour', icon: <Wrench size={17} /> },
   { page: 'monitoring', label: 'Monitoring', icon: <Activity size={17} /> },
@@ -143,9 +145,10 @@ export function Toolbar({ onAddServer }: { onAddServer: () => void }) {
 // ------------------------------------------------------------------ Barres d'état et console
 
 export function StatusRow() {
-  const { infra, jobs, navigate, selectJob } = useApp()
+  const { infra, nas, jobs, navigate, selectJob } = useApp()
   const reachable = infra.snapshots.filter((s) => s.reachable).length
   const total = infra.servers.length
+  const nasReachable = nas.snapshots.filter((s) => s.reachable).length
   const active = jobs.filter((j) => j.status === 'running' || j.status === 'queued')
   const running = active.find((j) => j.status === 'running')
   return (
@@ -154,6 +157,12 @@ export function StatusRow() {
         <span className={`dot ${total === 0 ? '' : reachable === total ? 'ok' : reachable === 0 ? 'bad' : 'warn'}`} />
         {total === 0 ? 'Aucun serveur configuré' : `Proxmox — ${reachable}/${total} serveur${total > 1 ? 's' : ''} connecté${reachable > 1 ? 's' : ''}`}
       </span>
+      {nas.systems.length > 0 && (
+        <button className="chip" onClick={() => navigate('nas')}>
+          <span className={`dot ${nasReachable === nas.systems.length ? 'ok' : nasReachable === 0 ? 'bad' : 'warn'}`} />
+          NAS — {nasReachable}/{nas.systems.length} connecté{nasReachable > 1 ? 's' : ''}
+        </button>
+      )}
       <span className="faint">Actualisé à {clock(infra.lastRefresh)}</span>
       {running && (
         <button className="chip on" onClick={() => void selectJob(running.id, true)}>

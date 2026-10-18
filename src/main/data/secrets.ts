@@ -14,6 +14,9 @@ export const secretKeys = {
   serverToken: (serverId: string) => `server:${serverId}:token`,
   sshPassword: (credentialId: string) => `ssh:${credentialId}:password`,
   sshPassphrase: (credentialId: string) => `ssh:${credentialId}:passphrase`,
+  nasSecret: (nasId: string) => `nas:${nasId}:secret`,
+  /** Jeton d'appareil approuvé après une validation en deux étapes (Synology). */
+  nasDevice: (nasId: string) => `nas:${nasId}:device`,
 }
 
 /** Coffre de secrets : seul le blob chiffré est écrit dans SQLite. */

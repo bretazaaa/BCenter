@@ -29,13 +29,15 @@
   },
   "dependencies": {
     "electron-updater": "^6.8.9",
-    "ssh2": "^1.17.0"
+    "ssh2": "^1.17.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/ssh2": "^1.15.6",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.1.2",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",

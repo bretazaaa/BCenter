@@ -27,6 +27,12 @@ const MIGRATIONS = [
   );
   CREATE INDEX ix_job_history_queued ON job_history(queued_at DESC);
   `,
+  `
+  CREATE TABLE nas_systems (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL, host TEXT NOT NULL, port INTEGER NOT NULL,
+    protocol TEXT NOT NULL, username TEXT NULL, pinned_fingerprint TEXT NULL, ssh_target_id TEXT NULL, created_at TEXT NOT NULL
+  );
+  `,
 ]
 
 export type Database = DatabaseSync

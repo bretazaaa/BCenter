@@ -1,4 +1,4 @@
-import { BookOpen, Heart, KeyRound, Network, Wrench } from 'lucide-react'
+import { BookOpen, HardDrive, Heart, KeyRound, Wrench } from 'lucide-react'
 import type { ServerProfile } from '@shared/types'
 import { api } from '../lib/api'
 import { useApp } from '../store'
@@ -89,7 +89,7 @@ export function WelcomeModal({ onClose }: { onClose: () => void }) {
         </div>
       </div>
       <div className="grid three" style={{ gap: 8 }}>
-        <button className="btn outline-accent" onClick={() => go('infrastructure')}><Network size={14} /> Infrastructure</button>
+        <button className="btn outline-accent" onClick={() => go('nas')}><HardDrive size={14} /> NAS</button>
         <button className="btn" onClick={() => go('updates')}><Wrench size={14} /> Mises à jour</button>
         <button className="btn" onClick={() => go('settings')}><KeyRound size={14} /> Réglages</button>
       </div>
@@ -101,10 +101,10 @@ export function WelcomeModal({ onClose }: { onClose: () => void }) {
       <div className="card" style={{ background: 'var(--panel-2)', padding: '14px 16px' }}>
         <div style={{ fontWeight: 600, marginBottom: 6 }}><BookOpen size={13} style={{ verticalAlign: -2, marginRight: 6 }} />Nouveautés</div>
         <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
-          <li>Nouvelle interface (React) et moteur Electron.</li>
-          <li>Snapshot Proxmox automatique avant chaque mise à jour, restaurable en un clic.</li>
-          <li>Console intégrée : journal de l’application et des tâches en direct.</li>
-          <li>Vos sauvegardes NAS / Proxmox Backup Server restent gérées par Proxmox.</li>
+          <li>Nouvelle page <b>NAS</b> : TrueNAS, Synology, Unraid, OpenMediaVault, QNAP et Proxmox Backup Server.</li>
+          <li>Volumes, disques (santé, température), partages et alertes du NAS dans BCenter, avec notifications Windows.</li>
+          <li>Actions directes : services, applications et conteneurs, snapshots, réplications et sauvegardes, scrub, mises à jour, redémarrage.</li>
+          <li>Shell SSH sur le NAS en l’associant à une machine.</li>
         </ul>
       </div>
     </Modal>

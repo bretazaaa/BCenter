@@ -5,6 +5,9 @@ import type {
   InfraSnapshot,
   JobLogLine,
   MetricPoint,
+  NasAction,
+  NasDisk,
+  NasProfile,
   RemoteSystem,
   RemoteTask,
   ScanResult,
@@ -13,6 +16,7 @@ import type {
   SshTarget,
 } from '@shared/types'
 import type { Engine, EnginePorts } from './engine'
+import type { NasData, NasDriver } from './nas/driver'
 import { secretKeys } from './data/secrets'
 import { snapshotName } from './services/snapshots'
 import type { GuestRef, VirtualizationProvider } from './services/provider'
@@ -23,13 +27,14 @@ import type { RemoteMaintenance, ShellHandle } from './ssh/client'
  * Données isolées dans %LOCALAPPDATA%\BCenter-demo.
  */
 export function createDemoPorts(ports: EnginePorts): EnginePorts {
-  return { ...ports, provider: new DemoProvider(), remote: new DemoRemote() }
+  return { ...ports, provider: new DemoProvider(), remote: new DemoRemote(), nasDriverFactory: (nas) => new DemoNasDriver(nas) }
 }
 
 const DEMO_SERVER_ID = '00000000-0000-4000-8000-000000000001'
 const DEMO_CREDENTIAL_ID = '00000000-0000-4000-8000-000000000002'
 
 export function seedDemo(engine: Engine): void {
+  if (engine.nasRepo.list().length === 0) seedDemoNas(engine)
   if (engine.servers.list().length > 0) return
   engine.servers.upsert({ id: DEMO_SERVER_ID, name: 'Cluster Lab', host: 'pve01.lab.lan', port: 8006, tokenId: 'root@pam!bcenter', pinnedFingerprint: 'AB', createdAt: new Date().toISOString() })
   engine.secrets.set(secretKeys.serverToken(DEMO_SERVER_ID), 'demo')
@@ -283,5 +288,183 @@ function demoShell(target: SshTarget, onData: (data: string) => void, onClose: (
     },
     resize() {},
     close,
+  }
+}
+
+// ------------------------------------------------------------------ NAS simulés
+
+const TB = 1024 ** 4
+
+const DEMO_NAS = [
+  { id: '00000000-0000-4000-8000-000000000011', name: 'TrueNAS', kind: 'truenas', host: '10.0.0.40', port: 443 },
+  { id: '00000000-0000-4000-8000-000000000012', name: 'Synology', kind: 'synology', host: '10.0.0.41', port: 5001 },
+  { id: '00000000-0000-4000-8000-000000000013', name: 'Backup Server', kind: 'pbs', host: '10.0.0.42', port: 8007 },
+] as const
+
+function seedDemoNas(engine: Engine): void {
+  for (const n of DEMO_NAS) {
+    engine.nasRepo.upsert({
+      ...n, protocol: 'https', username: n.kind === 'synology' ? 'bcenter' : n.kind === 'pbs' ? 'bcenter@pbs!bcenter' : null,
+      pinnedFingerprint: null, sshTargetId: n.kind === 'truenas' ? 'demo-nas' : null, createdAt: new Date().toISOString(),
+    })
+    engine.secrets.set(secretKeys.nasSecret(n.id), 'demo')
+  }
+}
+
+/** NAS de démonstration : données réalistes, actions appliquées à l'état simulé. */
+class DemoNasDriver implements NasDriver {
+  private readonly data: NasData
+
+  constructor(nas: NasProfile) {
+    this.data = nas.kind === 'synology' ? demoSynology() : nas.kind === 'pbs' ? demoPbs() : demoTrueNas()
+  }
+
+  async test() {
+    await wait(700)
+    return { version: this.data.system.version ?? 'Démo' }
+  }
+
+  async snapshot(): Promise<NasData> {
+    await wait(250)
+    return { ...this.data, system: { ...this.data.system, cpu: 0.06 + Math.random() * 0.08, uptime: (this.data.system.uptime ?? 0) + Math.floor(process.uptime()) } }
+  }
+
+  async action(action: NasAction): Promise<string> {
+    await wait(600)
+    const d = this.data
+    const verb = (op: 'start' | 'stop' | 'restart') => (op === 'stop' ? 'Arrêt' : op === 'start' ? 'Démarrage' : 'Redémarrage')
+    switch (action.kind) {
+      case 'service':
+        d.services = d.services.map((s) => (s.id === action.id ? { ...s, running: action.op !== 'stop' } : s))
+        return `${verb(action.op)} du service demandé.`
+      case 'app':
+        d.apps = d.apps.map((a) => (a.id === action.id ? { ...a, state: action.op === 'stop' ? 'stopped' : 'running', stateText: action.op === 'stop' ? 'STOPPED' : 'RUNNING' } : a))
+        return `${verb(action.op)} demandé.`
+      case 'task':
+        d.tasks = d.tasks.map((t) => (t.id === action.id ? { ...t, state: 'ok', lastRun: Date.now() } : t))
+        return 'Tâche lancée sur le NAS.'
+      case 'scrub':
+        d.pools = d.pools.map((p) => (p.id === action.poolId ? { ...p, scrub: { running: true, lastRun: Date.now(), errors: 0 } } : p))
+        return `Scrub du pool ${action.poolId} lancé.`
+      case 'update':
+        d.system = { ...d.system, updates: { available: false } }
+        return 'Mise à jour lancée : le NAS redémarrera à la fin de l’installation.'
+      case 'power':
+        return action.op === 'reboot' ? 'Redémarrage du NAS demandé (simulation).' : 'Arrêt du NAS demandé (simulation).'
+    }
+  }
+
+  close(): void {}
+}
+
+function demoTrueNas(): NasData {
+  const now = Date.now()
+  const disk = (i: number, pool: string, size: number, model: string, health: NasDisk['health'] = 'ok'): NasDisk => ({
+    id: `{serial}WD-${1000 + i}`, name: `sd${String.fromCharCode(97 + i)}`, model, serial: `WD-WX${71230 + i}`, size, temperature: 31 + (i % 4) * 2, pool,
+    health, healthText: health === 'ok' ? 'En ligne' : '3 erreur(s) E/S',
+  })
+  return {
+    system: { hostname: 'truenas', model: 'Supermicro X11SCH-F', version: 'TrueNAS-25.04.2', uptime: 41 * 86_400, memTotal: 64 * GB, updates: { available: true, version: '25.04.2.1' } },
+    pools: [
+      { id: 'tank', name: 'tank', kind: 'pool', status: 'healthy', statusText: 'ONLINE', used: 21.4 * TB, total: 32 * TB, detail: 'ZFS · RAIDZ2', scrub: { running: false, lastRun: now - 6 * 86_400_000, errors: 0 }, canScrub: true },
+      { id: 'fast', name: 'fast', kind: 'pool', status: 'healthy', statusText: 'ONLINE', used: 0.62 * TB, total: 1.8 * TB, detail: 'ZFS · MIRROR', scrub: { running: false, lastRun: now - 13 * 86_400_000, errors: 0 }, canScrub: true },
+    ],
+    disks: [
+      ...[0, 1, 2, 3, 4].map((i) => disk(i, 'tank', 8e12, 'WDC WD80EFZZ-68BTXN0')),
+      disk(5, 'tank', 8e12, 'WDC WD80EFZZ-68BTXN0', 'warning'),
+      disk(6, 'fast', 2e12, 'Samsung SSD 990 PRO 2TB'),
+      disk(7, 'fast', 2e12, 'Samsung SSD 990 PRO 2TB'),
+    ],
+    shares: [
+      { id: 'smb:1', name: 'media', protocol: 'SMB', path: '/mnt/tank/media', enabled: true },
+      { id: 'smb:2', name: 'documents', protocol: 'SMB', path: '/mnt/tank/documents', enabled: true, comment: 'Documents partagés' },
+      { id: 'nfs:1', name: 'proxmox-backups', protocol: 'NFS', path: '/mnt/tank/proxmox-backups', enabled: true },
+      { id: 'nfs:2', name: 'iso', protocol: 'NFS', path: '/mnt/fast/iso', enabled: false },
+    ],
+    services: [
+      { id: 'cifs', name: 'SMB', running: true, enabled: true, controllable: true },
+      { id: 'nfs', name: 'NFS', running: true, enabled: true, controllable: true },
+      { id: 'ssh', name: 'SSH', running: true, enabled: true, controllable: true },
+      { id: 'ups', name: 'UPS', running: false, enabled: false, controllable: true },
+      { id: 'snmp', name: 'SNMP', running: false, enabled: false, controllable: true },
+    ],
+    apps: [
+      { id: 'app:plex', name: 'plex', kind: 'app', state: 'running', stateText: 'RUNNING', version: '1.41.6', controllable: true },
+      { id: 'app:nextcloud', name: 'nextcloud', kind: 'app', state: 'running', stateText: 'RUNNING', version: '31.0.4', updateAvailable: true, controllable: true },
+      { id: 'app:immich', name: 'immich', kind: 'app', state: 'running', stateText: 'RUNNING', version: 'v1.132.3', controllable: true },
+      { id: 'app:syncthing', name: 'syncthing', kind: 'app', state: 'stopped', stateText: 'STOPPED', version: '1.29.5', controllable: true },
+      { id: 'vm:1', name: 'home-assistant', kind: 'vm', state: 'running', stateText: 'RUNNING', controllable: true },
+    ],
+    tasks: [
+      { id: 'snap:1', name: 'Snapshots tank/documents', type: 'snapshot', detail: 'auto-%Y-%m-%d_%H-%M', enabled: true, lastRun: now - 40 * 60_000, state: 'ok', canRun: true },
+      { id: 'snap:2', name: 'Snapshots tank/media', type: 'snapshot', detail: 'auto-%Y-%m-%d', enabled: true, lastRun: now - 9 * 3600_000, state: 'ok', canRun: true },
+      { id: 'repl:1', name: 'tank → backup-nas', type: 'replication', enabled: true, lastRun: now - 5 * 3600_000, state: 'ok', canRun: true },
+      { id: 'cloud:1', name: 'Documents → Backblaze B2', type: 'cloudsync', detail: '/mnt/tank/documents', enabled: true, lastRun: now - 26 * 3600_000, state: 'failed', canRun: true },
+    ],
+    alerts: [
+      { id: 'a1', level: 'warning', message: 'Device /dev/sdf: 3 Currently unreadable (pending) sectors.', time: now - 3 * 3600_000 },
+      { id: 'a2', level: 'info', message: 'An update is available for TrueNAS: 25.04.2.1.', time: now - 86_400_000 },
+    ],
+    capabilities: ['reboot', 'shutdown', 'update'],
+  }
+}
+
+function demoSynology(): NasData {
+  const now = Date.now()
+  return {
+    system: { hostname: 'syno-backup', model: 'DS920+', version: 'DSM 7.2.2-72806 Update 3', uptime: 12 * 86_400, temperature: 41, memUsed: 3.1 * GB, memTotal: 8 * GB },
+    pools: [{ id: 'volume_1', name: 'Volume 1', kind: 'volume', status: 'healthy', statusText: 'normal', used: 9.6 * TB, total: 10.9 * TB, detail: 'btrfs · SHR WITH 1 DISK PROTECT', canScrub: false }],
+    disks: [1, 2, 3, 4].map((i) => ({
+      id: `sata${i}`, name: `Disque ${i}`, model: 'ST4000VN006-3CW104', serial: `ZW6${i}A1B2`, size: 4e12, temperature: 36 + i, pool: 'Volume 1', health: 'ok' as const, healthText: 'Normal',
+    })),
+    shares: ['homes', 'photo', 'video', 'backup', 'docker'].map((name) => ({ id: name, name, protocol: 'SMB / NFS', path: `/volume1/${name}`, enabled: true })),
+    services: [
+      { id: 'smb', name: 'SMB', running: true, enabled: true, controllable: false },
+      { id: 'nfs', name: 'NFS', running: true, enabled: true, controllable: false },
+      { id: 'ssh', name: 'SSH', running: true, enabled: true, controllable: false },
+    ],
+    apps: [
+      { id: 'docker:vaultwarden', name: 'vaultwarden', kind: 'container', state: 'running', stateText: 'running', version: 'vaultwarden/server:latest', controllable: true },
+      { id: 'docker:uptime-kuma', name: 'uptime-kuma', kind: 'container', state: 'running', stateText: 'running', version: 'louislam/uptime-kuma:1', controllable: true },
+      { id: 'pkg:HyperBackup', name: 'Hyper Backup', kind: 'package', state: 'running', stateText: 'running', version: '4.1.2-4039', controllable: true },
+      { id: 'pkg:SynologyPhotos', name: 'Synology Photos', kind: 'package', state: 'running', stateText: 'running', version: '1.7.1-10015', controllable: true },
+      { id: 'pkg:ContainerManager', name: 'Container Manager', kind: 'package', state: 'running', stateText: 'running', version: '24.0.2-1543', controllable: true },
+    ],
+    tasks: [
+      { id: 'hb:1', name: 'Sauvegarde vers C2', type: 'backup', detail: 'Hyper Backup', enabled: true, lastRun: now - 7 * 3600_000, state: 'ok', canRun: true },
+      { id: 'hb:2', name: 'Copie USB hebdomadaire', type: 'backup', detail: 'Hyper Backup', enabled: true, lastRun: now - 4 * 86_400_000, state: 'ok', canRun: true },
+    ],
+    alerts: [],
+    capabilities: ['reboot', 'shutdown'],
+  }
+}
+
+function demoPbs(): NasData {
+  const now = Date.now()
+  return {
+    system: { hostname: 'pbs', version: 'Proxmox Backup Server 3.4.1-1', uptime: 63 * 86_400, cpu: 0.04, memUsed: 5.2 * GB, memTotal: 16 * GB, updates: { available: true, count: 7 } },
+    pools: [
+      { id: 'main', name: 'main', kind: 'datastore', status: 'healthy', used: 3.1 * TB, total: 4 * TB, detail: 'Datastore', canScrub: false },
+      { id: 'offsite', name: 'offsite', kind: 'datastore', status: 'healthy', used: 1.2 * TB, total: 8 * TB, detail: 'Datastore', canScrub: false },
+    ],
+    disks: [
+      { id: 'nvme0n1', name: '/dev/nvme0n1', model: 'KINGSTON SNV2S500G', size: 5e11, health: 'ok', healthText: 'PASSED', pool: 'root' },
+      { id: 'sda', name: '/dev/sda', model: 'ST4000NM000A', size: 4e12, health: 'ok', healthText: 'PASSED', pool: 'ZFS' },
+    ],
+    shares: [],
+    services: [
+      { id: 'proxmox-backup-proxy', name: 'proxmox-backup-proxy', running: true, enabled: true, controllable: false },
+      { id: 'postfix', name: 'postfix', running: true, enabled: true, controllable: true },
+      { id: 'chrony', name: 'chrony', running: true, enabled: true, controllable: true },
+    ],
+    apps: [],
+    tasks: [
+      { id: 'verify:v-main', name: 'Vérification main', type: 'verify', detail: 'daily', enabled: true, lastRun: now - 10 * 3600_000, state: 'ok', canRun: true },
+      { id: 'prune:p-main', name: 'Élagage main', type: 'prune', detail: 'daily', enabled: true, lastRun: now - 11 * 3600_000, state: 'ok', canRun: true },
+      { id: 'sync:s-offsite', name: 'Synchronisation main → offsite', type: 'sync', detail: 'sat 03:00', enabled: true, lastRun: now - 3 * 86_400_000, state: 'ok', canRun: true },
+      { id: 'gc:main', name: 'Garbage collection main', type: 'gc', enabled: true, lastRun: now - 30 * 3600_000, state: 'ok', canRun: true },
+    ],
+    alerts: [],
+    capabilities: ['reboot', 'shutdown'],
   }
 }

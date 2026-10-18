@@ -294,3 +294,160 @@ export type AppUpdateState =
   | { state: 'available' | 'downloading'; version: string; percent?: number }
   | { state: 'ready'; version: string }
   | { state: 'error'; message: string }
+
+// ---------------------------------------------------------------- NAS
+
+export type NasKind = 'truenas' | 'synology' | 'unraid' | 'omv' | 'qnap' | 'pbs'
+
+export interface NasKindInfo {
+  label: string
+  /** 'apiKey' : clé seule ; 'password' : utilisateur + mot de passe ; 'token' : identifiant + secret de jeton. */
+  auth: 'apiKey' | 'password' | 'token'
+  defaultPort: number
+  defaultProtocol: 'https' | 'http'
+  /** Niveau de prise en charge affiché à l'utilisateur. */
+  support: 'complete' | 'basic'
+}
+
+export const NAS_KINDS: Record<NasKind, NasKindInfo> = {
+  truenas: { label: 'TrueNAS (SCALE / CORE)', auth: 'apiKey', defaultPort: 443, defaultProtocol: 'https', support: 'complete' },
+  synology: { label: 'Synology DSM', auth: 'password', defaultPort: 5001, defaultProtocol: 'https', support: 'complete' },
+  unraid: { label: 'Unraid', auth: 'apiKey', defaultPort: 443, defaultProtocol: 'https', support: 'complete' },
+  omv: { label: 'OpenMediaVault', auth: 'password', defaultPort: 443, defaultProtocol: 'https', support: 'complete' },
+  qnap: { label: 'QNAP QTS / QuTS', auth: 'password', defaultPort: 443, defaultProtocol: 'https', support: 'basic' },
+  pbs: { label: 'Proxmox Backup Server', auth: 'token', defaultPort: 8007, defaultProtocol: 'https', support: 'complete' },
+}
+
+export interface NasProfile {
+  id: string
+  name: string
+  kind: NasKind
+  host: string
+  port: number
+  protocol: 'https' | 'http'
+  /** Utilisateur (Synology, OMV, QNAP) ou identifiant de jeton (PBS). Le secret est chiffré à part (DPAPI). */
+  username: string | null
+  /** Empreinte SHA-256 du certificat approuvée par l'utilisateur ; null = validé par Windows. */
+  pinnedFingerprint: string | null
+  /** Machine SSH associée (shell, mises à jour des paquets). */
+  sshTargetId: string | null
+  createdAt: string
+}
+
+export type NasHealth = 'healthy' | 'degraded' | 'faulted' | 'offline' | 'unknown'
+
+export interface NasSystemInfo {
+  hostname?: string
+  model?: string
+  version?: string
+  uptime?: number
+  cpu?: number
+  memUsed?: number
+  memTotal?: number
+  temperature?: number
+  rebootRequired?: boolean
+  updates?: { available: boolean; version?: string; count?: number }
+}
+
+export interface NasPool {
+  id: string
+  name: string
+  kind: 'pool' | 'volume' | 'array' | 'filesystem' | 'datastore' | 'raid' | 'cache'
+  status: NasHealth
+  statusText?: string
+  used: number
+  total: number
+  detail?: string
+  scrub?: { running: boolean; lastRun?: number; errors?: number }
+  canScrub: boolean
+}
+
+export interface NasDisk {
+  id: string
+  name: string
+  model?: string
+  serial?: string
+  size: number
+  temperature?: number
+  health: 'ok' | 'warning' | 'failing' | 'unknown'
+  healthText?: string
+  pool?: string
+}
+
+export interface NasShare {
+  id: string
+  name: string
+  protocol: string
+  path?: string
+  enabled: boolean
+  comment?: string
+}
+
+export interface NasService {
+  id: string
+  name: string
+  running: boolean
+  enabled?: boolean
+  controllable: boolean
+}
+
+export interface NasApp {
+  id: string
+  name: string
+  kind: 'app' | 'container' | 'vm' | 'package' | 'jail'
+  state: 'running' | 'stopped' | 'error' | 'busy' | 'unknown'
+  stateText?: string
+  version?: string
+  updateAvailable?: boolean
+  controllable: boolean
+}
+
+export interface NasTask {
+  id: string
+  name: string
+  type: 'snapshot' | 'replication' | 'cloudsync' | 'rsync' | 'backup' | 'verify' | 'prune' | 'gc' | 'sync' | 'parity' | 'cron'
+  detail?: string
+  enabled: boolean
+  lastRun?: number
+  state: 'ok' | 'failed' | 'running' | 'never' | 'unknown'
+  canRun: boolean
+}
+
+export interface NasAlert {
+  id: string
+  level: AlertSeverity
+  message: string
+  time?: number
+}
+
+export type NasCapability = 'reboot' | 'shutdown' | 'update'
+
+export interface NasSnapshot {
+  nas: NasProfile
+  timestamp: string
+  reachable: boolean
+  error?: string
+  system: NasSystemInfo
+  pools: NasPool[]
+  disks: NasDisk[]
+  shares: NasShare[]
+  services: NasService[]
+  apps: NasApp[]
+  tasks: NasTask[]
+  alerts: NasAlert[]
+  capabilities: NasCapability[]
+}
+
+export interface NasState {
+  systems: NasProfile[]
+  snapshots: NasSnapshot[]
+  lastRefresh: string | null
+}
+
+export type NasAction =
+  | { kind: 'service'; id: string; op: 'start' | 'stop' | 'restart' }
+  | { kind: 'app'; id: string; op: 'start' | 'stop' | 'restart' }
+  | { kind: 'task'; id: string }
+  | { kind: 'scrub'; poolId: string }
+  | { kind: 'update' }
+  | { kind: 'power'; op: 'reboot' | 'shutdown' }

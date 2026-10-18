@@ -10,6 +10,7 @@ import { GuestsPage } from './pages/Guests'
 import { InfrastructurePage } from './pages/Infrastructure'
 import { LogsPage } from './pages/Logs'
 import { MonitoringPage } from './pages/Monitoring'
+import { NasPage } from './pages/Nas'
 import { SettingsPage } from './pages/Settings'
 import { UpdatesPage } from './pages/Updates'
 import { on } from './lib/api'
@@ -19,6 +20,7 @@ import { Wizard } from './wizard/Wizard'
 const PAGES: Record<Page, () => React.JSX.Element> = {
   dashboard: Dashboard,
   infrastructure: InfrastructurePage,
+  nas: NasPage,
   guests: GuestsPage,
   updates: UpdatesPage,
   monitoring: MonitoringPage,
@@ -27,7 +29,7 @@ const PAGES: Record<Page, () => React.JSX.Element> = {
   settings: SettingsPage,
 }
 
-const SHORTCUTS: Record<string, Page> = { '1': 'dashboard', '2': 'infrastructure', '3': 'updates', '4': 'guests', ',': 'settings' }
+const SHORTCUTS: Record<string, Page> = { '1': 'dashboard', '2': 'infrastructure', '3': 'updates', '4': 'guests', '5': 'nas', ',': 'settings' }
 
 export function App() {
   const { ready, settings, page, consoleOpen, version, shell, openShell } = useApp()

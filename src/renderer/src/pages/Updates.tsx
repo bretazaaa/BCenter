@@ -215,13 +215,18 @@ function JobLogPanel({ jobId, title, lines }: { jobId: string | null; title?: st
 }
 
 /** Ajout d'une machine : invité Proxmox (facultatif), adresse, identifiants et vérification de la clé d'hôte. */
-export function AddTargetModal({ guest: preselected, onClose }: { guest?: GuestInfo; onClose: () => void }) {
+export function AddTargetModal({ guest: preselected, initial, onAdded, onClose }: {
+  guest?: GuestInfo
+  initial?: { name: string; host: string }
+  onAdded?: (target: SshTarget) => Promise<void> | void
+  onClose: () => void
+}) {
   const { infra, credentials } = useApp()
   const guests = useMemo(() => infra.snapshots.flatMap((s) => s.guests).filter((g) => !g.template).sort((a, b) => a.vmid - b.vmid), [infra])
   const names = new Map(infra.servers.map((s) => [s.id, s.name]))
   const [guest, setGuest] = useState<GuestInfo | null>(preselected ?? null)
-  const [name, setName] = useState(preselected?.name ?? '')
-  const [host, setHost] = useState('')
+  const [name, setName] = useState(preselected?.name ?? initial?.name ?? '')
+  const [host, setHost] = useState(initial?.host ?? '')
   const [port, setPort] = useState('22')
   const [credentialId, setCredentialId] = useState(credentials[0]?.id ?? '')
   const [hostKey, setHostKey] = useState<HostKeyInfo | null>(null)
@@ -269,7 +274,8 @@ export function AddTargetModal({ guest: preselected, onClose }: { guest?: GuestI
 
   const save = () => run(async () => {
     setStatus('Test de la connexion SSH…')
-    await api.addTarget({ name, host: host.trim(), port: Number(port), credentialId, hostKey: hostKey!, guest })
+    const target = await api.addTarget({ name, host: host.trim(), port: Number(port), credentialId, hostKey: hostKey!, guest })
+    await onAdded?.(target)
     await useApp.getState().reloadLists()
     useApp.getState().toast('success', `${name} ajoutée au centre de mises à jour. Analyse en cours…`)
     onClose()

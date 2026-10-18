@@ -12,6 +12,10 @@ import type {
   JobLogLine,
   MetricPoint,
   MetricTimeframe,
+  NasAction,
+  NasKind,
+  NasProfile,
+  NasState,
   PowerAction,
   RemoteSystem,
   RemoteTask,
@@ -45,6 +49,21 @@ export interface CredentialDraft {
   useSudo: boolean
   password?: string
   passphrase?: string
+}
+
+export interface NasDraft {
+  id?: string
+  name: string
+  kind: NasKind
+  host: string
+  port: number
+  protocol: 'https' | 'http'
+  username: string | null
+  /** Clé API, mot de passe ou secret de jeton. Vide lors d'une modification = conserver le secret actuel. */
+  secret: string
+  /** Code de validation en deux étapes (Synology), uniquement lors du test. */
+  otp?: string
+  pinnedFingerprint: string | null
 }
 
 export interface TargetDraft {
@@ -121,6 +140,18 @@ export interface BCenterApi {
   shellResize(sessionId: string, cols: number, rows: number): Promise<void>
   shellClose(sessionId: string): Promise<void>
 
+  // NAS
+  listNas(): Promise<NasProfile[]>
+  /** Teste la connexion ; `otpRequired` si le compte exige un code de validation en deux étapes. */
+  testNas(draft: NasDraft): Promise<{ version: string } | { otpRequired: true }>
+  saveNas(draft: NasDraft): Promise<NasProfile>
+  removeNas(id: string): Promise<void>
+  getNas(): Promise<NasState>
+  refreshNas(): Promise<NasState>
+  /** Exécute une action sur le NAS et renvoie le message de résultat. */
+  nasAction(nasId: string, action: NasAction): Promise<string>
+  linkNasTarget(nasId: string, targetId: string | null): Promise<NasProfile>
+
   // Alertes et journaux
   listAlerts(): Promise<{ active: Alert[]; history: Alert[] }>
   acknowledgeAlert(key: string): Promise<void>
@@ -135,6 +166,7 @@ export interface BCenterApi {
 export interface BCenterEvents {
   startup: StartupProgress
   infra: InfraState
+  nas: NasState
   alerts: { active: Alert[]; history: Alert[] }
   job: JobInfo
   jobLog: { jobId: string; lines: JobLogLine[] }

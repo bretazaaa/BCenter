@@ -1,4 +1,4 @@
-import type { Alert, AlertSeverity, AppSettings, InfraSnapshot, SshTarget } from '@shared/types'
+import type { Alert, AlertSeverity, AppSettings, InfraSnapshot, NasSnapshot, SshTarget } from '@shared/types'
 
 export type Notify = (title: string, body: string, severity: AlertSeverity) => void
 
@@ -62,7 +62,43 @@ export class AlertEngine {
       }
     }
 
-    this.apply(current, (key) => !key.startsWith('maint:'))
+    this.apply(current, (key) => !key.startsWith('maint:') && !key.startsWith('nas:'))
+  }
+
+  /** Alertes des NAS : accessibilité, santé des pools et disques, remplissage, alertes propres au NAS. */
+  evaluateNas(snapshots: NasSnapshot[], settings: AppSettings): void {
+    const current = new Map<string, Alert>()
+    const add = (key: string, severity: AlertSeverity, title: string, message: string, source: string) =>
+      current.set(key, { key, severity, title, message, source, raisedAt: Date.now(), acknowledged: false })
+
+    for (const s of snapshots) {
+      const id = s.nas.id
+      const source = s.nas.name
+      if (!s.reachable) {
+        add(`nas:${id}:down`, 'critical', 'NAS injoignable', `${source} ne répond pas : ${s.error ?? 'erreur inconnue'}`, source)
+        continue
+      }
+      for (const p of s.pools) {
+        if (p.status === 'degraded') add(`nas:${id}:pool:${p.id}`, 'warning', 'Stockage dégradé', `${p.name} sur ${source} est dégradé${p.statusText ? ` (${p.statusText})` : ''}.`, source)
+        else if (p.status === 'faulted' || p.status === 'offline') add(`nas:${id}:pool:${p.id}`, 'critical', 'Stockage hors service', `${p.name} sur ${source} est ${p.status === 'offline' ? 'hors ligne' : 'en panne'}${p.statusText ? ` (${p.statusText})` : ''}.`, source)
+        const ratio = p.total > 0 ? p.used / p.total : 0
+        if (ratio >= settings.storageThreshold) {
+          add(`nas:${id}:full:${p.id}`, ratio >= 0.95 ? 'critical' : 'warning', 'Stockage presque plein', `${p.name} sur ${source} est rempli à ${pct(ratio)}.`, source)
+        }
+      }
+      for (const d of s.disks) {
+        if (d.health === 'failing') add(`nas:${id}:disk:${d.id}`, 'critical', 'Disque défaillant', `${d.name}${d.model ? ` (${d.model})` : ''} sur ${source} : ${d.healthText ?? 'défaillance détectée'}.`, source)
+        else if (d.health === 'warning') add(`nas:${id}:disk:${d.id}`, 'warning', 'Disque à surveiller', `${d.name}${d.model ? ` (${d.model})` : ''} sur ${source} : ${d.healthText ?? 'avertissement'}.`, source)
+      }
+      for (const a of s.alerts.filter((x) => x.level !== 'info')) {
+        add(`nas:${id}:native:${a.id}`, a.level, `Alerte ${source}`, a.message, source)
+      }
+      if (s.system.updates?.available) {
+        add(`nas:${id}:update`, 'info', 'Mise à jour du NAS disponible', `${source} : ${s.system.updates.version ?? (s.system.updates.count ? `${s.system.updates.count} paquet(s)` : 'nouvelle version')} disponible.`, source)
+      }
+    }
+
+    this.apply(current, (key) => key.startsWith('nas:'))
   }
 
   /** Signale qu'une machine maintenue doit être redémarrée (ou ne le doit plus). */

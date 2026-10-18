@@ -150,7 +150,7 @@ function createMainWindow() {
   })
   // Liens externes dans le navigateur, jamais dans l'application.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https://')) void shell.openExternal(url)
+    if (/^https?:\/\//.test(url)) void shell.openExternal(url)
     return { action: 'deny' }
   })
   mainWindow.webContents.on('will-navigate', (event) => event.preventDefault())

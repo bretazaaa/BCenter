@@ -1,16 +1,19 @@
 import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import type { BCenterApi, BCenterEvents, CredentialDraft, ServerDraft, TargetDraft } from '@shared/api'
-import type { AlertSeverity, SshCredential, SshTarget } from '@shared/types'
+import type { BCenterApi, BCenterEvents, CredentialDraft, NasDraft, ServerDraft, TargetDraft } from '@shared/api'
+import { NAS_KINDS, type AlertSeverity, type NasProfile, type SshCredential, type SshTarget } from '@shared/types'
 import { Logger } from './core/logger'
 import { openDatabase, type Database } from './data/database'
-import { JobHistoryRepository, ServerRepository, SettingsRepository, SshRepository } from './data/repositories'
+import { JobHistoryRepository, NasRepository, ServerRepository, SettingsRepository, SshRepository } from './data/repositories'
 import { secretKeys, SecretStore, type SecretCipher } from './data/secrets'
+import { NasOtpRequired, type NasDriverFactory } from './nas/driver'
+import { createNasDriver } from './nas'
 import { ProxmoxProvider } from './proxmox/client'
 import { normalizeFingerprint } from './proxmox/tls'
 import { AlertEngine } from './services/alerts'
 import { MaintenanceService } from './services/maintenance'
+import { NasMonitor } from './services/nas'
 import { InfrastructureMonitor } from './services/monitor'
 import { SnapshotManager } from './services/snapshots'
 import type { VirtualizationProvider } from './services/provider'
@@ -24,6 +27,7 @@ export interface EnginePorts {
   /** Substitutions (tests, démonstration). */
   provider?: VirtualizationProvider
   remote?: RemoteMaintenance
+  nasDriverFactory?: NasDriverFactory
 }
 
 export type EngineApi = Omit<
@@ -43,15 +47,20 @@ export class Engine {
   readonly servers: ServerRepository
   readonly ssh: SshRepository
   readonly history: JobHistoryRepository
+  readonly nasRepo: NasRepository
   readonly provider: VirtualizationProvider
   readonly remote: RemoteMaintenance
   readonly alerts: AlertEngine
   readonly monitor: InfrastructureMonitor
   readonly snapshots: SnapshotManager
   readonly maintenance: MaintenanceService
+  readonly nas: NasMonitor
   readonly logsDir: string
 
   private readonly shells = new Map<string, ShellHandle>()
+  /** Jetons d'appareil obtenus lors d'un test (validation en deux étapes), en attente d'enregistrement. */
+  private readonly pendingDevices = new Map<string, string>()
+  private readonly nasFactory: NasDriverFactory
 
   constructor(private readonly ports: EnginePorts) {
     mkdirSync(ports.dataDir, { recursive: true })
@@ -65,6 +74,7 @@ export class Engine {
     this.servers = new ServerRepository(this.db, this.secrets)
     this.ssh = new SshRepository(this.db, this.secrets)
     this.history = new JobHistoryRepository(this.db)
+    this.nasRepo = new NasRepository(this.db, this.secrets)
 
     this.provider = ports.provider ?? new ProxmoxProvider(this.secrets, this.logger.scope('Proxmox'))
     this.remote = ports.remote ?? new SshMaintenance()
@@ -86,17 +96,23 @@ export class Engine {
       { job: (info) => ports.broadcast('job', info), log: (jobId, lines) => ports.broadcast('jobLog', { jobId, lines }) },
       this.logger.scope('Maintenance'),
     )
+    this.nasFactory = ports.nasDriverFactory ?? createNasDriver
+    this.nas = new NasMonitor(this.nasRepo, this.secrets, this.settings, this.alerts, this.nasFactory, this.logger.scope('NAS'))
+    this.nas.onChange((state) => ports.broadcast('nas', state))
   }
 
   start(): void {
     this.monitor.start()
     this.snapshots.start()
+    this.nas.reload()
+    this.nas.start()
   }
 
   stop(): void {
     for (const shell of this.shells.values()) shell.close()
     this.shells.clear()
     this.maintenance.stopAll()
+    this.nas.stop()
     this.monitor.stop()
     this.snapshots.stop()
     this.db.close()
@@ -223,7 +239,11 @@ export class Engine {
       this.maintenance.enqueue('scan', target)
       return target
     },
-    removeTarget: async (id) => this.ssh.removeTarget(id),
+    removeTarget: async (id) => {
+      this.ssh.removeTarget(id)
+      this.nasRepo.unlinkTarget(id)
+      this.nas.reload()
+    },
     linkTarget: async (id, guest) => {
       const target: SshTarget = {
         ...this.targetsOf([id])[0],
@@ -277,6 +297,63 @@ export class Engine {
       this.shells.delete(id)
     },
 
+    listNas: async () => this.nasRepo.list(),
+    testNas: async (draft) => {
+      const profile = this.nasProfileOf(draft)
+      const secret = draft.secret || (draft.id ? this.secrets.get(secretKeys.nasSecret(draft.id)) : null)
+      if (!secret) throw new Error(NAS_KINDS[profile.kind].auth === 'password' ? 'Saisissez le mot de passe.' : 'Saisissez la clé ou le secret du jeton API.')
+      const existing = draft.id ? this.nasRepo.find(draft.id) : undefined
+      const deviceToken = existing && existing.username === profile.username ? this.secrets.get(secretKeys.nasDevice(existing.id)) : null
+      const driver = this.nasFactory(profile, { secret, deviceToken, otp: draft.otp })
+      try {
+        const result = await driver.test()
+        if (result.deviceToken) this.pendingDevices.set(pendingKey(draft), result.deviceToken)
+        return { version: result.version }
+      } catch (error) {
+        if (error instanceof NasOtpRequired) return { otpRequired: true as const }
+        throw error
+      } finally {
+        driver.close()
+      }
+    },
+    saveNas: async (draft) => {
+      const profile = this.nasProfileOf(draft)
+      const existing = this.nasRepo.find(profile.id)
+      if (draft.secret) this.secrets.set(secretKeys.nasSecret(profile.id), draft.secret)
+      else if (!this.secrets.get(secretKeys.nasSecret(profile.id))) throw new Error('Saisissez le secret de connexion.')
+      const device = this.pendingDevices.get(pendingKey(draft))
+      this.pendingDevices.delete(pendingKey(draft))
+      if (device) this.secrets.set(secretKeys.nasDevice(profile.id), device)
+      else if (existing && existing.username !== profile.username) this.secrets.delete(secretKeys.nasDevice(profile.id))
+      this.nasRepo.upsert(profile)
+      this.nas.invalidate(profile.id)
+      this.nas.reload()
+      void this.nas.refresh()
+      this.logger.scope('NAS').info(`NAS ${profile.name} (${NAS_KINDS[profile.kind].label}) enregistré`)
+      return profile
+    },
+    removeNas: async (id) => {
+      this.nas.invalidate(id)
+      this.nasRepo.remove(id)
+      this.nas.reload()
+      void this.nas.refresh()
+    },
+    getNas: async () => this.nas.state,
+    refreshNas: async () => {
+      await this.nas.refresh()
+      return this.nas.state
+    },
+    nasAction: (id, action) => this.nas.action(id, action),
+    linkNasTarget: async (id, targetId) => {
+      const nas = this.nasRepo.find(id)
+      if (!nas) throw new Error('NAS introuvable.')
+      if (targetId) this.targetsOf([targetId])
+      const updated: NasProfile = { ...nas, sshTargetId: targetId }
+      this.nasRepo.upsert(updated)
+      this.nas.reload()
+      return updated
+    },
+
     listAlerts: async () => this.alerts.list(),
     acknowledgeAlert: async (key) => this.alerts.acknowledge(key),
     appLogs: async () => this.logger.recent,
@@ -299,6 +376,31 @@ export class Engine {
     }
   }
 
+  private nasProfileOf(draft: NasDraft): NasProfile {
+    const kind = NAS_KINDS[draft.kind]
+    if (!kind) throw new Error('Type de NAS inconnu.')
+    const host = draft.host.trim()
+    if (!/^[a-z0-9.\-:[\]]+$/i.test(host)) throw new Error('Adresse du NAS invalide.')
+    if (!Number.isInteger(draft.port) || draft.port < 1 || draft.port > 65535) throw new Error('Port invalide.')
+    // TrueNAS révoque automatiquement une clé API utilisée sans chiffrement.
+    if (draft.kind === 'truenas' && draft.protocol !== 'https') throw new Error('TrueNAS exige HTTPS pour l’utilisation des clés API.')
+    const username = kind.auth === 'apiKey' ? null : draft.username?.trim() || null
+    if (kind.auth !== 'apiKey' && !username) throw new Error(kind.auth === 'token' ? 'Saisissez l’identifiant du jeton API.' : 'Saisissez le nom d’utilisateur.')
+    const existing = draft.id ? this.nasRepo.find(draft.id) : undefined
+    return {
+      id: draft.id ?? randomUUID(),
+      name: draft.name.trim() || host,
+      kind: draft.kind,
+      host,
+      port: draft.port,
+      protocol: draft.protocol === 'http' ? 'http' : 'https',
+      username,
+      pinnedFingerprint: draft.protocol === 'https' && draft.pinnedFingerprint ? normalizeFingerprint(draft.pinnedFingerprint) : null,
+      sshTargetId: existing?.sshTargetId ?? null,
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+    }
+  }
+
   private requireServer(id: string) {
     const server = this.monitor.findServer(id) ?? this.servers.find(id)
     if (!server) throw new Error('Serveur introuvable.')
@@ -312,6 +414,8 @@ export class Engine {
     return found
   }
 }
+
+const pendingKey = (draft: NasDraft) => JSON.stringify([draft.id ?? null, draft.kind, draft.host.trim(), draft.port, draft.username?.trim() ?? null])
 
 function credentialOf(draft: CredentialDraft): SshCredential {
   return {

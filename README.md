@@ -15,17 +15,20 @@ npm run typecheck  # TypeScript checks
 npm run dist       # build the Windows installer into dist/
 ```
 
-Stack: Electron, React, Vite, Zustand, TypeScript, Recharts, ssh2, SQLite (`node:sqlite`), electron-builder and electron-updater.
+Stack: Electron, React, Vite, Zustand, TypeScript, Recharts, ssh2, ws, SQLite (`node:sqlite`), electron-builder and electron-updater.
 
 ```
 src/
-├─ main/       Electron main process: engine, Proxmox client, SSH, storage, tray, updates
+├─ main/       Electron main process: engine, Proxmox client, NAS drivers, SSH, storage, tray, updates
 ├─ preload/    Isolated bridge between the UI and the engine
 ├─ renderer/   React interface
 └─ shared/     Types and API contract shared by both sides
 ```
 
 Other virtualization platforms can be added by implementing `VirtualizationProvider` (`src/main/services/provider.ts`).
+
+NAS platforms (TrueNAS, Synology DSM, Unraid, OpenMediaVault, QNAP, Proxmox Backup Server) are drivers implementing
+`NasDriver` (`src/main/nas/driver.ts`), registered in `src/main/nas/index.ts`.
 
 ## Releasing
 

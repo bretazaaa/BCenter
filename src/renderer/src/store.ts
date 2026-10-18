@@ -7,6 +7,7 @@ import type {
   InfraState,
   JobInfo,
   JobLogLine,
+  NasState,
   ScanResult,
   ServerProfile,
   SshCredential,
@@ -14,7 +15,7 @@ import type {
 } from '@shared/types'
 import { api, on } from './lib/api'
 
-export type Page = 'dashboard' | 'infrastructure' | 'guests' | 'updates' | 'monitoring' | 'alerts' | 'logs' | 'settings'
+export type Page = 'dashboard' | 'infrastructure' | 'nas' | 'guests' | 'updates' | 'monitoring' | 'alerts' | 'logs' | 'settings'
 
 export interface Toast {
   id: number
@@ -31,6 +32,7 @@ interface AppStore {
   version: string
   settings: AppSettings | null
   infra: InfraState
+  nas: NasState
   alerts: { active: Alert[]; history: Alert[] }
   jobs: JobInfo[]
   jobLogs: Record<string, JobLogLine[]>
@@ -69,6 +71,7 @@ export const useApp = create<AppStore>((set, get) => ({
   version: '',
   settings: null,
   infra: { servers: [], snapshots: [], history: [], lastRefresh: null },
+  nas: { systems: [], snapshots: [], lastRefresh: null },
   alerts: { active: [], history: [] },
   jobs: [],
   jobLogs: {},
@@ -93,6 +96,7 @@ export const useApp = create<AppStore>((set, get) => ({
     if (initialized) return
     initialized = true
     on('infra', (infra) => set({ infra }))
+    on('nas', (nas) => set({ nas }))
     on('alerts', (alerts) => set({ alerts }))
     on('maximized', (maximized) => set({ maximized }))
     on('navigate', (target) =>
@@ -112,10 +116,10 @@ export const useApp = create<AppStore>((set, get) => ({
       set((s) => ({ jobLogs: { ...s.jobLogs, [jobId]: [...(s.jobLogs[jobId] ?? []), ...lines].slice(-MAX_JOB_LOG) } })),
     )
 
-    const [info, settings, infra, alerts, jobs, logs] = await Promise.all([
-      api.appInfo(), api.getSettings(), api.getInfra(), api.listAlerts(), api.listJobs(), api.appLogs(),
+    const [info, settings, infra, nas, alerts, jobs, logs] = await Promise.all([
+      api.appInfo(), api.getSettings(), api.getInfra(), api.getNas(), api.listAlerts(), api.listJobs(), api.appLogs(),
     ])
-    set({ version: info.version, settings, infra, alerts, jobs, logs, ready: true })
+    set({ version: info.version, settings, infra, nas, alerts, jobs, logs, ready: true })
     await get().reloadLists()
   },
 
@@ -134,7 +138,8 @@ export const useApp = create<AppStore>((set, get) => ({
   async refresh() {
     set({ refreshing: true })
     try {
-      set({ infra: await api.refreshInfra() })
+      const [infra, nas] = await Promise.all([api.refreshInfra(), api.refreshNas()])
+      set({ infra, nas })
     } finally {
       set({ refreshing: false })
     }

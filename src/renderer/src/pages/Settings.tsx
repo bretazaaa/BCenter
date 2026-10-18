@@ -1,10 +1,11 @@
-import { Download, FolderOpen, KeyRound, Network, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Download, FolderOpen, HardDrive, KeyRound, Network, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { AppSettings, ServerProfile } from '@shared/types'
+import { NAS_KINDS, type AppSettings, type NasProfile, type ServerProfile } from '@shared/types'
 import { confirm } from '../components/dialogs'
 import { CredentialModal, ServerModal } from '../components/modals'
 import { Card, Field, SettingRow, Switch } from '../components/ui'
 import { api } from '../lib/api'
+import { NasModal } from './Nas'
 import { attempt, useApp } from '../store'
 
 export function SettingsPage() {
@@ -12,6 +13,8 @@ export function SettingsPage() {
   const [draft, setDraft] = useState<AppSettings>(saved!)
   const [serverModal, setServerModal] = useState<ServerProfile | 'new' | null>(null)
   const [credentialModal, setCredentialModal] = useState(false)
+  const [nasModal, setNasModal] = useState<NasProfile | 'new' | null>(null)
+  const nas = useApp((s) => s.nas)
   const [dataDir, setDataDir] = useState('')
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved)
   const patch = (p: Partial<AppSettings>) => setDraft((d) => ({ ...d, ...p }))
@@ -24,6 +27,12 @@ export function SettingsPage() {
     if (await confirm({ title: 'Supprimer le serveur', danger: true, confirmText: 'Supprimer', message: `Supprimer ${s.name} de BCenter ? Le jeton API chiffré sera effacé. Aucune modification n’est faite sur le serveur.` })) {
       await attempt(() => api.removeServer(s.id), 'Serveur supprimé.')
       await reloadLists()
+    }
+  }
+
+  const removeNas = async (n: NasProfile) => {
+    if (await confirm({ title: 'Supprimer le NAS', danger: true, confirmText: 'Supprimer', message: `Supprimer ${n.name} de BCenter ? Ses identifiants chiffrés seront effacés. Aucune modification n’est faite sur le NAS.` })) {
+      await attempt(() => api.removeNas(n.id), 'NAS supprimé.')
     }
   }
 
@@ -112,6 +121,18 @@ export function SettingsPage() {
             ))}
           </Card>
 
+          <Card title="NAS" subtitle="Clés et mots de passe chiffrés avec Windows DPAPI" actions={<button className="btn sm" onClick={() => setNasModal('new')}><Plus size={13} /> Ajouter</button>}>
+            {nas.systems.length === 0 && <div className="faint">Aucun NAS enregistré.</div>}
+            {nas.systems.map((n) => (
+              <SettingRow key={n.id} title={<span><HardDrive size={14} style={{ verticalAlign: -2, marginRight: 8, color: 'var(--accent-2)' }} />{n.name}</span>} description={`${NAS_KINDS[n.kind].label} · ${n.host}:${n.port}${n.username ? ` · ${n.username}` : ''}`}>
+                <div className="row" style={{ gap: 4 }}>
+                  <button className="btn ghost sm icon" title="Modifier" onClick={() => setNasModal(n)}><Pencil size={13} /></button>
+                  <button className="btn ghost sm icon" title="Supprimer" onClick={() => void removeNas(n)}><Trash2 size={13} /></button>
+                </div>
+              </SettingRow>
+            ))}
+          </Card>
+
           <Card title="Identifiants SSH" subtitle="Utilisés pour la maintenance des machines" actions={<button className="btn sm" onClick={() => setCredentialModal(true)}><Plus size={13} /> Ajouter</button>}>
             {credentials.length === 0 && <div className="faint">Aucun identifiant enregistré.</div>}
             {credentials.map((c) => (
@@ -155,6 +176,7 @@ export function SettingsPage() {
 
       {serverModal && <ServerModal server={serverModal === 'new' ? undefined : serverModal} onClose={() => setServerModal(null)} />}
       {credentialModal && <CredentialModal onClose={() => setCredentialModal(false)} />}
+      {nasModal && <NasModal nas={nasModal === 'new' ? undefined : nasModal} onClose={() => setNasModal(null)} />}
     </div>
   )
 }

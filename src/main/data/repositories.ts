@@ -3,6 +3,8 @@ import {
   type AppSettings,
   type GuestKind,
   type JobHistoryEntry,
+  type NasKind,
+  type NasProfile,
   type ServerProfile,
   type SshCredential,
   type SshTarget,
@@ -140,6 +142,55 @@ export class SshRepository {
 
   removeTarget(id: string): void {
     this.db.prepare('DELETE FROM ssh_targets WHERE id = ?').run(id)
+  }
+}
+
+export class NasRepository {
+  constructor(
+    private readonly db: Database,
+    private readonly secrets: SecretStore,
+  ) {}
+
+  list(): NasProfile[] {
+    return (this.db.prepare('SELECT * FROM nas_systems ORDER BY name').all() as Row[]).map((r) => ({
+      id: r.id as string,
+      name: r.name as string,
+      kind: r.kind as NasKind,
+      host: r.host as string,
+      port: Number(r.port),
+      protocol: r.protocol === 'http' ? 'http' : 'https',
+      username: (r.username as string | null) ?? null,
+      pinnedFingerprint: (r.pinned_fingerprint as string | null) ?? null,
+      sshTargetId: (r.ssh_target_id as string | null) ?? null,
+      createdAt: r.created_at as string,
+    }))
+  }
+
+  find(id: string): NasProfile | undefined {
+    return this.list().find((n) => n.id === id)
+  }
+
+  upsert(n: NasProfile): void {
+    this.db
+      .prepare(
+        `INSERT INTO nas_systems(id, name, kind, host, port, protocol, username, pinned_fingerprint, ssh_target_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET name = excluded.name, kind = excluded.kind, host = excluded.host, port = excluded.port,
+           protocol = excluded.protocol, username = excluded.username, pinned_fingerprint = excluded.pinned_fingerprint,
+           ssh_target_id = excluded.ssh_target_id`,
+      )
+      .run(n.id, n.name, n.kind, n.host, n.port, n.protocol, n.username, n.pinnedFingerprint, n.sshTargetId, n.createdAt)
+  }
+
+  remove(id: string): void {
+    this.db.prepare('DELETE FROM nas_systems WHERE id = ?').run(id)
+    this.secrets.delete(secretKeys.nasSecret(id))
+    this.secrets.delete(secretKeys.nasDevice(id))
+  }
+
+  /** Une machine SSH supprimée n'est plus associée à aucun NAS. */
+  unlinkTarget(targetId: string): void {
+    this.db.prepare('UPDATE nas_systems SET ssh_target_id = NULL WHERE ssh_target_id = ?').run(targetId)
   }
 }
 
