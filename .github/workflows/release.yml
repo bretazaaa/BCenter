@@ -1,15 +1,18 @@
-# Publishes a new BCenter version.
+# Publishes a new BCenter version to the public distribution repository (bretazaaa/BCenter).
 # Push a tag "vX.Y.Z" matching the version in package.json: the workflow runs the checks,
-# builds the Windows installer and publishes it as a GitHub Release, where installed
-# copies of BCenter pick it up automatically (electron-updater).
+# builds the Windows installer, uploads it to a draft release in the public repository and
+# publishes it once complete. Installed copies of BCenter then update automatically.
+#
+# Requires the RELEASE_TOKEN secret: a fine-grained token with "Contents: read and write"
+# on bretazaaa/BCenter.
 name: Release
 
 on:
   push:
     tags: ['v*']
 
-permissions:
-  contents: write
+env:
+  PUBLIC_REPO: bretazaaa/BCenter
 
 jobs:
   release:
@@ -34,23 +37,25 @@ jobs:
       - run: npx electron-vite build
 
       # A single draft release is created up front: electron-builder uploads its assets in parallel
-      # and would otherwise create one release per asset. The release is published once complete,
-      # so installed copies never see a partial release.
+      # and would otherwise create one release per asset.
       - name: Create a draft release
         shell: pwsh
         run: |
-          gh release view "${{ github.ref_name }}" *> $null
-          if ($LASTEXITCODE -ne 0) { gh release create "${{ github.ref_name }}" --draft --title "BCenter ${{ github.ref_name }}" --generate-notes --verify-tag; if ($LASTEXITCODE -ne 0) { exit 1 } }
+          gh release view "${{ github.ref_name }}" --repo $env:PUBLIC_REPO *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create "${{ github.ref_name }}" --repo $env:PUBLIC_REPO --draft --target main --title "BCenter ${{ github.ref_name }}" --notes "BCenter ${{ github.ref_name }}"
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
           exit 0
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Build the installer and upload it to the draft
         run: npx electron-builder --win --x64 --publish always
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Publish the release
-        run: gh release edit "${{ github.ref_name }}" --draft=false --latest
+        run: gh release edit "${{ github.ref_name }}" --repo ${{ env.PUBLIC_REPO }} --draft=false --latest
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}

@@ -3,7 +3,7 @@
   "productName": "BCenter",
   "version": "0.1.0",
   "description": "Windows desktop app to monitor and maintain Proxmox VE infrastructure",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "author": "Bretaza",
   "homepage": "https://github.com/bretazaaa/BCenter",
   "repository": {
