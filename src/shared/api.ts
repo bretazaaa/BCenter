@@ -99,6 +99,9 @@ export interface BCenterApi {
   listTargets(): Promise<SshTarget[]>
   addTarget(draft: TargetDraft): Promise<SshTarget>
   removeTarget(id: string): Promise<void>
+  /** Lie (ou délie) une machine à un invité Proxmox : active snapshots et raccourcis depuis VM / LXC. */
+  linkTarget(targetId: string, guest: GuestInfo | null): Promise<SshTarget>
+  setCredentialSudo(credentialId: string, useSudo: boolean): Promise<void>
 
   // Maintenance
   listJobs(): Promise<JobInfo[]>

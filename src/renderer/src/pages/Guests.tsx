@@ -29,7 +29,17 @@ export function GuestsPage() {
     return !q || g.name.toLowerCase().includes(q) || String(g.vmid).includes(q) || g.node.toLowerCase().includes(q) || g.tags.some((t) => t.toLowerCase().includes(q))
   })
   const chosen = all.filter((g) => selected.has(keyOf(g)))
-  const linkedTarget = chosen.length === 1 ? targets.find((t) => t.serverId === chosen[0].serverId && t.vmid === chosen[0].vmid) : undefined
+  // Machine du centre de mises à jour correspondant à l'invité : liée explicitement, sinon même nom.
+  const linkedTarget = chosen.length === 1
+    ? targets.find((t) => t.serverId === chosen[0].serverId && t.vmid === chosen[0].vmid)
+      ?? targets.find((t) => t.vmid == null && t.name.toLowerCase() === chosen[0].name.toLowerCase())
+    : undefined
+
+  const shell = () => {
+    if (linkedTarget) return openShell(linkedTarget)
+    useApp.getState().toast('info', 'Configurez d’abord l’accès SSH de cet invité : il sera ensuite disponible dans le centre de mises à jour.')
+    setMaintenanceGuest(chosen[0])
+  }
 
   const toggle = (g: GuestInfo) =>
     setSelected((s) => {
@@ -67,8 +77,8 @@ export function GuestsPage() {
           <button className="btn" disabled={!chosen.length} onClick={() => void power('shutdown')}><Power size={14} /> Arrêter</button>
           <button className="btn" disabled={!chosen.length} onClick={() => void power('reboot')}><RotateCcw size={14} /> Redémarrer</button>
           <button className="btn" disabled={!chosen.length} onClick={() => void power('stop')}><Square size={14} /> Forcer l’arrêt</button>
-          <button className="btn" disabled={!linkedTarget} onClick={() => linkedTarget && openShell(linkedTarget)}
-            title={chosen.length === 1 && !linkedTarget ? 'Ajoutez d’abord cet invité au centre de mises à jour (bouton Maintenance) pour configurer son accès SSH.' : 'Ouvrir un shell SSH'}>
+          <button className="btn" disabled={chosen.length !== 1} onClick={shell}
+            title={chosen.length === 1 && !linkedTarget ? 'Accès SSH à configurer pour cet invité' : 'Ouvrir un shell SSH'}>
             <TerminalSquare size={14} /> Shell
           </button>
           <button className="btn primary" disabled={chosen.length !== 1 || !!linkedTarget} onClick={() => setMaintenanceGuest(chosen[0])}><Wrench size={14} /> Maintenance</button>

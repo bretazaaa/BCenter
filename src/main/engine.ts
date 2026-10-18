@@ -224,6 +224,22 @@ export class Engine {
       return target
     },
     removeTarget: async (id) => this.ssh.removeTarget(id),
+    linkTarget: async (id, guest) => {
+      const target: SshTarget = {
+        ...this.targetsOf([id])[0],
+        serverId: guest?.serverId ?? null,
+        node: guest?.node ?? null,
+        vmid: guest?.vmid ?? null,
+        guestKind: guest?.kind ?? null,
+      }
+      this.ssh.upsertTarget(target)
+      return target
+    },
+    setCredentialSudo: async (id, useSudo) => {
+      const credential = this.ssh.credentials().find((c) => c.id === id)
+      if (!credential) throw new Error('Identifiants SSH introuvables.')
+      this.ssh.upsertCredential({ ...credential, useSudo })
+    },
 
     listJobs: async () => this.maintenance.list(),
     jobLog: async (id) => this.maintenance.jobLog(id),

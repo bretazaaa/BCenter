@@ -115,7 +115,9 @@ export function SettingsPage() {
           <Card title="Identifiants SSH" subtitle="Utilisés pour la maintenance des machines" actions={<button className="btn sm" onClick={() => setCredentialModal(true)}><Plus size={13} /> Ajouter</button>}>
             {credentials.length === 0 && <div className="faint">Aucun identifiant enregistré.</div>}
             {credentials.map((c) => (
-              <SettingRow key={c.id} title={<span><KeyRound size={14} style={{ verticalAlign: -2, marginRight: 8, color: 'var(--violet)' }} />{c.name}</span>} description={`${c.username} · ${c.authMethod === 'key' ? 'clé privée' : 'mot de passe'}${c.useSudo ? ' · sudo' : ''}`}>
+              <SettingRow key={c.id} title={<span><KeyRound size={14} style={{ verticalAlign: -2, marginRight: 8, color: 'var(--violet)' }} />{c.name}</span>} description={`${c.username} · ${c.authMethod === 'key' ? 'clé privée' : 'mot de passe'}`}>
+                <span className="muted" style={{ fontSize: 12 }} title="Exécuter les commandes de maintenance avec sudo (sans mot de passe) quand l’utilisateur n’est pas root">sudo</span>
+                <Switch checked={c.useSudo} onChange={(v) => void attempt(async () => { await api.setCredentialSudo(c.id, v); await reloadLists() })} />
                 <button className="btn ghost sm icon" title="Supprimer" onClick={() => void removeCredential(c.id, c.name)}><Trash2 size={13} /></button>
               </SettingRow>
             ))}

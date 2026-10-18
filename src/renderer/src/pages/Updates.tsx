@@ -1,4 +1,4 @@
-import { Download, KeyRound, Plus, RefreshCw, RotateCcw, Search, ShieldAlert, TerminalSquare, Trash2, Undo2, Wrench, X, Server, Copy } from 'lucide-react'
+import { Download, KeyRound, Link2, Plus, RefreshCw, RotateCcw, Search, ShieldAlert, TerminalSquare, Trash2, Undo2, Wrench, X, Server, Copy } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { GuestInfo, HostKeyInfo, SnapshotInfo, SshTarget } from '@shared/types'
 import { confirm, useAction } from '../components/dialogs'
@@ -13,6 +13,7 @@ export function UpdatesPage() {
   const [snapshots, setSnapshots] = useState<Record<string, SnapshotInfo | null>>({})
   const [adding, setAdding] = useState(false)
   const [upgrading, setUpgrading] = useState<SshTarget[] | null>(null)
+  const [linking, setLinking] = useState<SshTarget | null>(null)
 
   const loadSnapshots = async () => {
     const result: Record<string, SnapshotInfo | null> = {}
@@ -96,6 +97,7 @@ export function UpdatesPage() {
         <span className="faint">{chosen.length ? `${chosen.length} machine(s) sélectionnée(s)` : 'Sélectionnez une ou plusieurs machines'}</span>
         <span style={{ flex: 1 }} />
         <button className="btn" disabled={chosen.length !== 1} onClick={() => openShell(chosen[0])}><TerminalSquare size={14} /> Shell</button>
+        <button className="btn" disabled={chosen.length !== 1} onClick={() => setLinking(chosen[0])} title="Lier la machine à son invité Proxmox (snapshots, restauration)"><Link2 size={14} /> Lier à Proxmox</button>
         <button className="btn" disabled={!chosen.length} onClick={() => void attempt(() => api.scan(chosen.map((t) => t.id)))}><Search size={14} /> Analyser</button>
         <button className="btn primary" disabled={!chosen.length} onClick={() => setUpgrading(chosen)}><Download size={14} /> Mettre à jour</button>
         <button className="btn" disabled={chosen.length !== 1} onClick={() => void rollback()}><Undo2 size={14} /> Restaurer le snapshot</button>
@@ -182,6 +184,7 @@ export function UpdatesPage() {
       <JobLogPanel jobId={selectedJobId} title={selectedJob?.title} lines={selectedJobId ? jobLogs[selectedJobId] ?? [] : []} />
 
       {adding && <AddTargetModal onClose={() => setAdding(false)} />}
+      {linking && <LinkModal target={linking} onClose={() => setLinking(null)} />}
       {upgrading && <UpgradeModal targets={upgrading} snapshotDefault={settings?.snapshotBeforeUpdate ?? true} retention={settings?.snapshotRetentionDays ?? 7} onClose={() => setUpgrading(null)} />}
     </div>
   )
@@ -372,6 +375,43 @@ function UpgradeModal({ targets, snapshotDefault, retention, onClose }: { target
           </Check>
         </div>
       </div>
+    </Modal>
+  )
+}
+
+/** Lie une machine ajoutée manuellement à son invité Proxmox (snapshot préalable, restauration, shell depuis VM / LXC). */
+function LinkModal({ target, onClose }: { target: SshTarget; onClose: () => void }) {
+  const infra = useApp((s) => s.infra)
+  const guests = useMemo(() => infra.snapshots.flatMap((s) => s.guests).filter((g) => !g.template).sort((a, b) => a.vmid - b.vmid), [infra])
+  const names = new Map(infra.servers.map((s) => [s.id, s.name]))
+  const current = guests.find((g) => g.serverId === target.serverId && g.vmid === target.vmid)
+    ?? guests.find((g) => g.name.toLowerCase() === target.name.toLowerCase())
+  const keyOf = (g: GuestInfo) => `${g.serverId}/${g.vmid}`
+  const [key, setKey] = useState(current ? keyOf(current) : '')
+  const { busy, error, run } = useAction()
+
+  const save = () => run(async () => {
+    const guest = guests.find((g) => keyOf(g) === key) ?? null
+    await api.linkTarget(target.id, guest)
+    await useApp.getState().reloadLists()
+    useApp.getState().toast('success', guest ? `${target.name} est liée à l’invité ${guest.vmid} · ${guest.name}.` : `${target.name} n’est plus liée à Proxmox.`)
+    onClose()
+  })
+
+  return (
+    <Modal title={`Lier ${target.name} à Proxmox`} width={560} onClose={onClose}
+      footer={<><span className="error">{error}</span><button className="btn" onClick={onClose}>Annuler</button><button className="btn primary" disabled={busy} onClick={() => void save()}>Enregistrer</button></>}>
+      <p style={{ marginTop: 0 }} className="muted">
+        Une fois liée à son invité, la machine bénéficie du snapshot automatique avant mise à jour, de la restauration en un clic et du shell depuis la page VM / LXC.
+      </p>
+      <Field label="Invité Proxmox">
+        <select className="select" value={key} onChange={(e) => setKey(e.target.value)}>
+          <option value="">— Non liée —</option>
+          {guests.map((g) => (
+            <option key={keyOf(g)} value={keyOf(g)}>{g.vmid} · {g.name} ({g.kind === 'lxc' ? 'LXC' : 'VM'}, {names.get(g.serverId)} / {g.node})</option>
+          ))}
+        </select>
+      </Field>
     </Modal>
   )
 }

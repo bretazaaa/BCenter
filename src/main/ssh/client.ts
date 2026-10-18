@@ -163,6 +163,7 @@ export class SshMaintenance implements RemoteMaintenance {
       const system = await this.systemInfo(session)
       log(line('info', `Système : ${system.osName ?? '?'} ${system.osVersion ?? ''} — noyau ${system.kernel ?? '?'} — ${system.packageManager}`))
       ensureSupported(system)
+      ensurePrivileged(system, credential)
 
       const refresh = commands.refresh(system.packageManager)
       if (refresh) {
@@ -190,6 +191,7 @@ export class SshMaintenance implements RemoteMaintenance {
     try {
       const system = await this.systemInfo(session)
       ensureSupported(system)
+      ensurePrivileged(system, credential)
       const refresh = commands.refresh(system.packageManager)
       if (refresh) ensureSuccess(await session.run(privileged(refresh, credential, system), log, signal), "l'actualisation des index")
 
@@ -306,5 +308,18 @@ function ensureSuccess(result: { code: number; output: string }, step: string) {
   if (/sudo: a (password|terminal) is required/i.test(result.output)) {
     throw new Error("sudo exige un mot de passe. Autorisez l'utilisateur à exécuter le gestionnaire de paquets sans mot de passe (NOPASSWD) ou utilisez root.")
   }
+  if (/permission denied|are you root/i.test(result.output)) {
+    throw new Error('Droits insuffisants pour le gestionnaire de paquets. Connectez-vous en root, ou activez sudo (sans mot de passe) pour cet utilisateur.')
+  }
   throw new Error(`Échec de ${step} (code de sortie ${result.code}).`)
+}
+
+/** Un utilisateur non root sans sudo ne peut pas installer de paquets : on l'indique avant d'essayer. */
+function ensurePrivileged(system: RemoteSystem, credential: SshCredential) {
+  if (!system.isRoot && !credential.useSudo) {
+    throw new Error(
+      `L'utilisateur « ${credential.username} » n'est pas root et l'option sudo est désactivée pour ces identifiants. ` +
+        'Activez sudo dans Réglages › Identifiants SSH (sudo sans mot de passe sur la machine), ou utilisez root.',
+    )
+  }
 }
