@@ -26,10 +26,10 @@ nsis:
   uninstallDisplayName: BCenter
   deleteAppDataOnUninstall: false
   artifactName: BCenter-Setup-${version}.${ext}
-# Mises à jour : publiées sous forme de « Releases » GitHub (installeur + latest.yml),
-# lues par electron-updater depuis l'application installée.
+# Updates are published as GitHub Releases (installer + latest.yml). CI uploads into a draft
+# release and publishes it once complete (see .github/workflows/release.yml).
 publish:
   provider: github
   owner: bretazaaa
   repo: BCenter
-  releaseType: release
+  releaseType: draft
