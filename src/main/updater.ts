@@ -48,7 +48,8 @@ export class AppUpdater {
   }
 
   install(): void {
-    autoUpdater.quitAndInstall(false, true)
+    // Installation silencieuse (aucun assistant), puis relance automatique de BCenter.
+    autoUpdater.quitAndInstall(true, true)
   }
 
   private version() {
