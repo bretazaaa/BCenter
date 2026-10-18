@@ -40,7 +40,9 @@ function Menu({ label, items }: { label: string; items: (MenuItem | 'sep')[] }) 
   )
 }
 
-export function TitleBar({ simple = false, onAddServer }: { simple?: boolean; onAddServer?: () => void }) {
+export type AddKind = 'server' | 'nas' | 'target'
+
+export function TitleBar({ simple = false, onAdd }: { simple?: boolean; onAdd?: (kind: AddKind) => void }) {
   const { maximized, navigate, refresh, toggleConsole } = useApp()
   return (
     <header className="titlebar" onDoubleClick={(e) => e.target === e.currentTarget && void api.windowToggleMaximize()}>
@@ -48,7 +50,9 @@ export function TitleBar({ simple = false, onAddServer }: { simple?: boolean; on
       {!simple && (
         <>
           <Menu label="Infrastructure" items={[
-            { label: 'Ajouter un serveur Proxmox…', action: () => onAddServer?.() },
+            { label: 'Ajouter un serveur Proxmox…', action: () => onAdd?.('server') },
+            { label: 'Ajouter un NAS…', action: () => onAdd?.('nas') },
+            { label: 'Ajouter une machine SSH…', action: () => onAdd?.('target') },
             { label: 'NAS', kbd: 'Ctrl+5', action: () => navigate('nas') },
             { label: 'Actualiser', kbd: 'F5', action: () => void refresh() },
             'sep',
@@ -91,7 +95,7 @@ const NAV: { page: Page; label: string; icon: ReactNode }[] = [
   { page: 'logs', label: 'Journaux', icon: <ScrollText size={17} /> },
 ]
 
-export function Toolbar({ onAddServer }: { onAddServer: () => void }) {
+export function Toolbar({ onAdd }: { onAdd: (kind: AddKind) => void }) {
   const { page, navigate, refresh, refreshing, search, setSearch, alerts, scans } = useApp()
   const searchRef = useRef<HTMLInputElement>(null)
   const unacknowledged = alerts.active.filter((a) => !a.acknowledged).length
@@ -111,7 +115,7 @@ export function Toolbar({ onAddServer }: { onAddServer: () => void }) {
 
   return (
     <nav className="toolbar">
-      <button className="tool" onClick={onAddServer}><Plus size={17} />Ajouter</button>
+      <AddMenu onAdd={onAdd} />
       <button className="tool" onClick={() => void refresh()} disabled={refreshing}>
         <RefreshCw size={17} className={refreshing ? 'spin' : ''} />Actualiser
       </button>
@@ -256,6 +260,41 @@ export function Toasts() {
           <div className="selectable">{t.text}</div>
         </div>
       ))}
+    </div>
+  )
+}
+
+/** Bouton « Ajouter » : serveur Proxmox, NAS ou machine SSH. */
+function AddMenu({ onAdd }: { onAdd: (kind: AddKind) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false)
+    window.addEventListener('mousedown', close)
+    return () => window.removeEventListener('mousedown', close)
+  }, [open])
+  const items: [AddKind, ReactNode, string, string][] = [
+    ['server', <Network size={15} />, 'Serveur Proxmox', 'Nœuds, VM et conteneurs LXC'],
+    ['nas', <HardDrive size={15} />, 'NAS', 'TrueNAS, Synology, Unraid, OMV, QNAP, PBS'],
+    ['target', <Terminal size={15} />, 'Machine SSH', 'Mises à jour et shell'],
+  ]
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button className={`tool${open ? ' active' : ''}`} onClick={() => setOpen((o) => !o)}><Plus size={17} />Ajouter</button>
+      {open && (
+        <div className="menu-pop" style={{ top: 56, minWidth: 290 }}>
+          {items.map(([kind, icon, label, detail]) => (
+            <button key={kind} onClick={() => { setOpen(false); onAdd(kind) }}>
+              <span style={{ color: 'var(--accent)', display: 'flex' }}>{icon}</span>
+              <span>
+                <div>{label}</div>
+                <div className="faint" style={{ fontSize: 11.5 }}>{detail}</div>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

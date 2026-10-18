@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { DialogHost } from './components/dialogs'
 import { ShellWindow } from './components/ShellWindow'
 import { ServerModal, WelcomeModal } from './components/modals'
-import { Console, StatusBar, StatusRow, TitleBar, Toasts, Toolbar } from './components/shell'
+import { Console, StatusBar, StatusRow, TitleBar, Toasts, Toolbar, type AddKind } from './components/shell'
 import { Logo } from './components/ui'
 import { AlertsPage } from './pages/Alerts'
 import { Dashboard } from './pages/Dashboard'
@@ -10,9 +10,9 @@ import { GuestsPage } from './pages/Guests'
 import { InfrastructurePage } from './pages/Infrastructure'
 import { LogsPage } from './pages/Logs'
 import { MonitoringPage } from './pages/Monitoring'
-import { NasPage } from './pages/Nas'
+import { NasModal, NasPage } from './pages/Nas'
 import { SettingsPage } from './pages/Settings'
-import { UpdatesPage } from './pages/Updates'
+import { AddTargetModal, UpdatesPage } from './pages/Updates'
 import { on } from './lib/api'
 import { useApp, type Page } from './store'
 import { Wizard } from './wizard/Wizard'
@@ -33,7 +33,7 @@ const SHORTCUTS: Record<string, Page> = { '1': 'dashboard', '2': 'infrastructure
 
 export function App() {
   const { ready, settings, page, consoleOpen, version, shell, openShell } = useApp()
-  const [addServer, setAddServer] = useState(false)
+  const [adding, setAdding] = useState<AddKind | null>(null)
   const [welcome, setWelcome] = useState(false)
 
   useEffect(() => {
@@ -89,8 +89,8 @@ export function App() {
   const Current = PAGES[page]
   return (
     <div className="shell">
-      <TitleBar onAddServer={() => setAddServer(true)} />
-      <Toolbar onAddServer={() => setAddServer(true)} />
+      <TitleBar onAdd={setAdding} />
+      <Toolbar onAdd={setAdding} />
       <main className="content">
         <Current key={page} />
       </main>
@@ -100,7 +100,9 @@ export function App() {
       <Toasts />
       <DialogHost />
       {shell && <ShellWindow key={shell.id} target={shell} onClose={() => openShell(null)} />}
-      {addServer && <ServerModal onClose={() => setAddServer(false)} />}
+      {adding === 'server' && <ServerModal onClose={() => setAdding(null)} />}
+      {adding === 'nas' && <NasModal onClose={() => setAdding(null)} />}
+      {adding === 'target' && <AddTargetModal onClose={() => setAdding(null)} />}
       {welcome && (
         <WelcomeModal
           onClose={() => {
