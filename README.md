@@ -11,10 +11,6 @@
   <a href="https://github.com/bretazaaa/BCenter/releases"><img src="https://img.shields.io/github/downloads/bretazaaa/BCenter/total?color=3b82f6" alt="Downloads"></a>
 </p>
 
-<p align="center">
-  <img src="assets/screenshot.png" width="760" alt="BCenter dashboard">
-</p>
-
 ---
 
 ## Download
