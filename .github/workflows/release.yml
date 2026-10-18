@@ -1,0 +1,39 @@
+# Publishes a new BCenter version.
+# Push a tag "vX.Y.Z" matching the version in package.json: the workflow runs the checks,
+# builds the Windows installer and publishes it as a GitHub Release, where installed
+# copies of BCenter pick it up automatically (electron-updater).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Check that the tag matches package.json
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          if ("v$version" -ne "${{ github.ref_name }}") { throw "Tag ${{ github.ref_name }} does not match package.json version $version" }
+
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm test
+      - run: npx electron-vite build
+
+      - name: Build and publish the installer
+        run: npx electron-builder --win --x64 --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
