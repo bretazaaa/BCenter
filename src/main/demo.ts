@@ -16,7 +16,7 @@ import type { Engine, EnginePorts } from './engine'
 import { secretKeys } from './data/secrets'
 import { snapshotName } from './services/snapshots'
 import type { GuestRef, VirtualizationProvider } from './services/provider'
-import type { RemoteMaintenance } from './ssh/client'
+import type { RemoteMaintenance, ShellHandle } from './ssh/client'
 
 /**
  * Mode démonstration (`--demo`) : vraie interface et vrai moteur, mais Proxmox et SSH simulés.
@@ -219,8 +219,69 @@ class DemoRemote implements RemoteMaintenance {
     return { rebootRequired: Math.random() > 0.5 }
   }
 
+  async openShell(target: SshTarget, _c: unknown, _s: unknown, _size: unknown, onData: (data: string) => void, onClose: () => void) {
+    await wait(600)
+    return demoShell(target, onData, onClose)
+  }
+
   async reboot(_t: SshTarget, _c: unknown, _s: unknown, log: (l: JobLogLine) => void) {
     await wait(600)
     log({ time: Date.now(), level: 'info', text: 'Redémarrage programmé dans 2 secondes.' })
+  }
+}
+
+/** Shell simulé du mode démonstration (quelques commandes courantes). */
+function demoShell(target: SshTarget, onData: (data: string) => void, onClose: () => void): ShellHandle {
+  const prompt = `\x1b[1;32mroot@${target.name}\x1b[0m:\x1b[1;34m~\x1b[0m# `
+  const outputs: Record<string, string> = {
+    help: 'Shell de démonstration BCenter. Commandes : ls, uname -a, uptime, df -h, free -h, hostname, whoami, apt list --upgradable, clear, exit',
+    ls: 'backup.sh  docker-compose.yml  logs  scripts',
+    'uname -a': `Linux ${target.name} 6.1.0-26-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.1.112-1 x86_64 GNU/Linux`,
+    uptime: ' 17:42:08 up 12 days,  3:14,  1 user,  load average: 0,18, 0,22, 0,19',
+    'df -h': 'Filesystem      Size  Used Avail Use% Mounted on\n/dev/sda1        62G   18G   41G  31% /\ntmpfs           3,9G     0  3,9G   0% /dev/shm',
+    'free -h': '               total        used        free      shared  buff/cache   available\nMem:           7,8Gi       2,1Gi       3,9Gi        12Mi       1,8Gi       5,4Gi\nSwap:          975Mi          0B       975Mi',
+    hostname: target.name,
+    whoami: 'root',
+    'apt list --upgradable': 'Listing... Done\nopenssl/stable-security 3.0.15-1~deb12u1 amd64 [upgradable from: 3.0.14-1~deb12u2]\ncurl/stable 7.88.1-10+deb12u8 amd64 [upgradable from: 7.88.1-10+deb12u7]',
+  }
+  let line = ''
+  let closed = false
+  const close = () => {
+    if (closed) return
+    closed = true
+    onClose()
+  }
+  setTimeout(() => onData(`Linux ${target.name} 6.1.0-26-amd64 x86_64\r\n\r\nShell de démonstration — tapez « help ».\r\n${prompt}`), 300)
+  return {
+    write(data) {
+      for (const ch of data) {
+        if (ch === '\r') {
+          const cmd = line.trim()
+          line = ''
+          onData('\r\n')
+          if (cmd === 'exit') {
+            onData('logout\r\n')
+            setTimeout(close, 200)
+            return
+          }
+          if (cmd === 'clear') onData('\x1b[2J\x1b[H')
+          else if (cmd) onData(`${(outputs[cmd] ?? `bash: ${cmd.split(' ')[0]}: command not found`).replaceAll('\n', '\r\n')}\r\n`)
+          onData(prompt)
+        } else if (ch === '\x7f') {
+          if (line) {
+            line = line.slice(0, -1)
+            onData('\b \b')
+          }
+        } else if (ch === '\x03') {
+          line = ''
+          onData(`^C\r\n${prompt}`)
+        } else if (ch >= ' ') {
+          line += ch
+          onData(ch)
+        }
+      }
+    },
+    resize() {},
+    close,
   }
 }

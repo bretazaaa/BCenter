@@ -338,3 +338,9 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; }
 
 /* ------------------------------------------------------------ Logo */
 .logo { display: block; }
+
+/* ------------------------------------------------------------ Shell SSH */
+.modal.shell-window { width: min(1180px, calc(100vw - 48px)); height: min(760px, calc(100vh - 60px)); max-height: none; }
+.shell-body { flex: 1; min-height: 0; padding: 8px 4px 6px 10px; background: #08090c; border-radius: 0 0 12px 12px; }
+.shell-body .xterm { height: 100%; }
+.shell-body .xterm-viewport { background: #08090c !important; }

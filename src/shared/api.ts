@@ -112,6 +112,12 @@ export interface BCenterApi {
   targetSnapshots(targetId: string): Promise<SnapshotInfo[]>
   jobHistory(): Promise<JobHistoryEntry[]>
 
+  // Shell SSH interactif
+  openShell(targetId: string, cols: number, rows: number): Promise<string>
+  shellWrite(sessionId: string, data: string): Promise<void>
+  shellResize(sessionId: string, cols: number, rows: number): Promise<void>
+  shellClose(sessionId: string): Promise<void>
+
   // Alertes et journaux
   listAlerts(): Promise<{ active: Alert[]; history: Alert[] }>
   acknowledgeAlert(key: string): Promise<void>
@@ -133,6 +139,8 @@ export interface BCenterEvents {
   maximized: boolean
   appUpdate: AppUpdateState
   navigate: string
+  shellData: { id: string; data: string }
+  shellExit: { id: string }
 }
 
 export type ApiResult<T> = { ok: true; value: T } | { ok: false; error: string }

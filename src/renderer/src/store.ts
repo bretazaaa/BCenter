@@ -49,6 +49,7 @@ interface AppStore {
   selectedJobId: string | null
   search: string
   toasts: Toast[]
+  shell: SshTarget | null
 
   init(): Promise<void>
   navigate(page: Page): void
@@ -60,6 +61,7 @@ interface AppStore {
   saveSettings(settings: AppSettings): Promise<void>
   toast(kind: Toast['kind'], text: string): void
   dismissToast(id: number): void
+  openShell(target: SshTarget | null): void
 }
 
 export const useApp = create<AppStore>((set, get) => ({
@@ -85,6 +87,7 @@ export const useApp = create<AppStore>((set, get) => ({
   selectedJobId: null,
   search: '',
   toasts: [],
+  shell: null,
 
   async init() {
     if (initialized) return
@@ -153,6 +156,7 @@ export const useApp = create<AppStore>((set, get) => ({
   },
 
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+  openShell: (shell) => set({ shell }),
 }))
 
 /** Exécute une opération et affiche l'erreur éventuelle sous forme de notification interne. */

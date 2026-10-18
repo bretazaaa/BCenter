@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { DialogHost } from './components/dialogs'
+import { ShellWindow } from './components/ShellWindow'
 import { ServerModal, WelcomeModal } from './components/modals'
 import { Console, StatusBar, StatusRow, TitleBar, Toasts, Toolbar } from './components/shell'
 import { Logo } from './components/ui'
@@ -29,7 +30,7 @@ const PAGES: Record<Page, () => React.JSX.Element> = {
 const SHORTCUTS: Record<string, Page> = { '1': 'dashboard', '2': 'infrastructure', '3': 'updates', '4': 'guests', ',': 'settings' }
 
 export function App() {
-  const { ready, settings, page, consoleOpen, version } = useApp()
+  const { ready, settings, page, consoleOpen, version, shell, openShell } = useApp()
   const [addServer, setAddServer] = useState(false)
   const [welcome, setWelcome] = useState(false)
 
@@ -46,6 +47,8 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Les raccourcis de l'application ne s'appliquent pas dans un terminal.
+      if ((e.target as HTMLElement | null)?.closest?.('.xterm')) return
       const s = useApp.getState()
       if (e.key === 'F5') {
         e.preventDefault()
@@ -94,6 +97,7 @@ export function App() {
       <StatusBar />
       <Toasts />
       <DialogHost />
+      {shell && <ShellWindow key={shell.id} target={shell} onClose={() => openShell(null)} />}
       {addServer && <ServerModal onClose={() => setAddServer(false)} />}
       {welcome && (
         <WelcomeModal

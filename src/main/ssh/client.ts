@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
+import { StringDecoder } from 'node:string_decoder'
 import { Client, type ConnectConfig } from 'ssh2'
 import type { HostKeyInfo, JobLogLine, LogLevel, RemoteSystem, ScanResult, SshCredential, SshTarget, UpgradeOptions } from '@shared/types'
 import { commands, parseDnfSecurity, parsePackageManager, parseUpdates } from './packages'
@@ -18,6 +19,19 @@ export interface RemoteMaintenance {
   scan(target: SshTarget, credential: SshCredential, secrets: SshSecrets, log: LogSink, signal?: AbortSignal): Promise<ScanResult>
   upgrade(target: SshTarget, credential: SshCredential, secrets: SshSecrets, options: UpgradeOptions, log: LogSink, signal?: AbortSignal): Promise<{ rebootRequired: boolean }>
   reboot(target: SshTarget, credential: SshCredential, secrets: SshSecrets, log: LogSink, signal?: AbortSignal): Promise<void>
+  /** Ouvre un shell interactif (terminal) ; la clé d'hôte est vérifiée comme pour la maintenance. */
+  openShell(target: SshTarget, credential: SshCredential, secrets: SshSecrets, size: TerminalSize, onData: (data: string) => void, onClose: () => void): Promise<ShellHandle>
+}
+
+export interface TerminalSize {
+  cols: number
+  rows: number
+}
+
+export interface ShellHandle {
+  write(data: string): void
+  resize(size: TerminalSize): void
+  close(): void
 }
 
 /** Empreinte au format OpenSSH : SHA-256 en base64 sans « = ». */
@@ -74,6 +88,35 @@ class Session {
           signal?.removeEventListener('abort', onAbort)
           if (log && pending.trim()) log(line('output', pending))
           resolve({ code: code ?? -1, output })
+        })
+      })
+    })
+  }
+
+  /** Shell interactif avec pseudo-terminal (xterm-256color). */
+  shell(size: TerminalSize, onData: (data: string) => void, onClose: () => void): Promise<ShellHandle> {
+    return new Promise((resolve, reject) => {
+      this.client.shell({ term: 'xterm-256color', cols: size.cols, rows: size.rows }, (err, stream) => {
+        if (err) {
+          this.end()
+          return reject(err)
+        }
+        // Décodage progressif : un caractère UTF-8 peut être coupé entre deux paquets.
+        const out = new StringDecoder('utf8')
+        const errors = new StringDecoder('utf8')
+        stream.on('data', (chunk: Buffer) => onData(out.write(chunk)))
+        stream.stderr.on('data', (chunk: Buffer) => onData(errors.write(chunk)))
+        stream.on('close', () => {
+          this.end()
+          onClose()
+        })
+        resolve({
+          write: (data) => void stream.write(data),
+          resize: ({ cols, rows }) => stream.setWindow(rows, cols, 0, 0),
+          close: () => {
+            stream.end()
+            this.end()
+          },
         })
       })
     })
@@ -170,6 +213,11 @@ export class SshMaintenance implements RemoteMaintenance {
     } finally {
       session.end()
     }
+  }
+
+  async openShell(target: SshTarget, credential: SshCredential, secrets: SshSecrets, size: TerminalSize, onData: (data: string) => void, onClose: () => void) {
+    const session = await this.connect(target, credential, secrets)
+    return session.shell(size, onData, onClose)
   }
 
   private async connect(target: SshTarget, credential: SshCredential, secrets: SshSecrets, log?: LogSink): Promise<Session> {

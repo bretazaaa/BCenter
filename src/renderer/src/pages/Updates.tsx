@@ -1,4 +1,4 @@
-import { Download, KeyRound, Plus, RefreshCw, RotateCcw, Search, ShieldAlert, Trash2, Undo2, Wrench, X, Server, Copy } from 'lucide-react'
+import { Download, KeyRound, Plus, RefreshCw, RotateCcw, Search, ShieldAlert, TerminalSquare, Trash2, Undo2, Wrench, X, Server, Copy } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { GuestInfo, HostKeyInfo, SnapshotInfo, SshTarget } from '@shared/types'
 import { confirm, useAction } from '../components/dialogs'
@@ -8,7 +8,7 @@ import { clock, dateTime, relative } from '../lib/format'
 import { attempt, useApp } from '../store'
 
 export function UpdatesPage() {
-  const { targets, scans, jobs, jobLogs, selectedJobId, selectJob, settings } = useApp()
+  const { targets, scans, jobs, jobLogs, selectedJobId, selectJob, settings, openShell } = useApp()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [snapshots, setSnapshots] = useState<Record<string, SnapshotInfo | null>>({})
   const [adding, setAdding] = useState(false)
@@ -95,6 +95,7 @@ export function UpdatesPage() {
       <div className="row" style={{ marginBottom: 12, alignItems: 'center' }}>
         <span className="faint">{chosen.length ? `${chosen.length} machine(s) sélectionnée(s)` : 'Sélectionnez une ou plusieurs machines'}</span>
         <span style={{ flex: 1 }} />
+        <button className="btn" disabled={chosen.length !== 1} onClick={() => openShell(chosen[0])}><TerminalSquare size={14} /> Shell</button>
         <button className="btn" disabled={!chosen.length} onClick={() => void attempt(() => api.scan(chosen.map((t) => t.id)))}><Search size={14} /> Analyser</button>
         <button className="btn primary" disabled={!chosen.length} onClick={() => setUpgrading(chosen)}><Download size={14} /> Mettre à jour</button>
         <button className="btn" disabled={chosen.length !== 1} onClick={() => void rollback()}><Undo2 size={14} /> Restaurer le snapshot</button>
@@ -113,7 +114,7 @@ export function UpdatesPage() {
               <thead>
                 <tr>
                   <th className="w-check"><Check checked={targets.length > 0 && selected.size === targets.length} onChange={(v) => setSelected(v ? new Set(targets.map((t) => t.id)) : new Set())} /></th>
-                  <th>Machine</th><th>Système</th><th>Mises à jour</th><th>Redémarrage</th><th>Snapshot</th><th>Analyse</th>
+                  <th>Machine</th><th>Système</th><th>Mises à jour</th><th>Redémarrage</th><th>Snapshot</th><th>Analyse</th><th />
                 </tr>
               </thead>
               <tbody>
@@ -147,6 +148,9 @@ export function UpdatesPage() {
                         )}
                       </td>
                       <td className="muted">{scan ? relative(scan.scannedAt) : 'Jamais'}</td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <button className="btn ghost sm icon" title="Ouvrir un shell" onClick={() => openShell(t)}><TerminalSquare size={14} /></button>
+                      </td>
                     </tr>
                   )
                 })}

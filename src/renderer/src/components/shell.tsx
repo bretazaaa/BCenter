@@ -97,6 +97,7 @@ export function Toolbar({ onAddServer }: { onAddServer: () => void }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement | null)?.closest?.('.xterm')) return
       if (e.ctrlKey && e.key.toLowerCase() === 'f') {
         e.preventDefault()
         searchRef.current?.focus()

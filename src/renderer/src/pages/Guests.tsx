@@ -1,4 +1,4 @@
-import { Monitor, Play, Power, RotateCcw, Search, Square, Wrench } from 'lucide-react'
+import { Monitor, Play, Power, RotateCcw, Search, Square, TerminalSquare, Wrench } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { GuestInfo, PowerAction } from '@shared/types'
 import { confirm } from '../components/dialogs'
@@ -13,7 +13,7 @@ type State = 'all' | 'running' | 'stopped'
 const keyOf = (g: GuestInfo) => `${g.serverId}/${g.vmid}`
 
 export function GuestsPage() {
-  const { infra, search, setSearch } = useApp()
+  const { infra, search, setSearch, targets, openShell } = useApp()
   const [kind, setKind] = useState<Kind>('all')
   const [state, setState] = useState<State>('all')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -29,6 +29,7 @@ export function GuestsPage() {
     return !q || g.name.toLowerCase().includes(q) || String(g.vmid).includes(q) || g.node.toLowerCase().includes(q) || g.tags.some((t) => t.toLowerCase().includes(q))
   })
   const chosen = all.filter((g) => selected.has(keyOf(g)))
+  const linkedTarget = chosen.length === 1 ? targets.find((t) => t.serverId === chosen[0].serverId && t.vmid === chosen[0].vmid) : undefined
 
   const toggle = (g: GuestInfo) =>
     setSelected((s) => {
@@ -66,7 +67,11 @@ export function GuestsPage() {
           <button className="btn" disabled={!chosen.length} onClick={() => void power('shutdown')}><Power size={14} /> Arrêter</button>
           <button className="btn" disabled={!chosen.length} onClick={() => void power('reboot')}><RotateCcw size={14} /> Redémarrer</button>
           <button className="btn" disabled={!chosen.length} onClick={() => void power('stop')}><Square size={14} /> Forcer l’arrêt</button>
-          <button className="btn primary" disabled={chosen.length !== 1} onClick={() => setMaintenanceGuest(chosen[0])}><Wrench size={14} /> Maintenance</button>
+          <button className="btn" disabled={!linkedTarget} onClick={() => linkedTarget && openShell(linkedTarget)}
+            title={chosen.length === 1 && !linkedTarget ? 'Ajoutez d’abord cet invité au centre de mises à jour (bouton Maintenance) pour configurer son accès SSH.' : 'Ouvrir un shell SSH'}>
+            <TerminalSquare size={14} /> Shell
+          </button>
+          <button className="btn primary" disabled={chosen.length !== 1 || !!linkedTarget} onClick={() => setMaintenanceGuest(chosen[0])}><Wrench size={14} /> Maintenance</button>
         </div>
       </div>
 

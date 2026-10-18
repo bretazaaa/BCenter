@@ -14,7 +14,7 @@ import { MaintenanceService } from './services/maintenance'
 import { InfrastructureMonitor } from './services/monitor'
 import { SnapshotManager } from './services/snapshots'
 import type { VirtualizationProvider } from './services/provider'
-import { SshMaintenance, type RemoteMaintenance, type SshSecrets } from './ssh/client'
+import { SshMaintenance, type RemoteMaintenance, type ShellHandle, type SshSecrets } from './ssh/client'
 
 export interface EnginePorts {
   dataDir: string
@@ -51,7 +51,9 @@ export class Engine {
   readonly maintenance: MaintenanceService
   readonly logsDir: string
 
-  constructor(ports: EnginePorts) {
+  private readonly shells = new Map<string, ShellHandle>()
+
+  constructor(private readonly ports: EnginePorts) {
     mkdirSync(ports.dataDir, { recursive: true })
     this.logsDir = join(ports.dataDir, 'logs')
     this.logger = new Logger(this.logsDir)
@@ -92,6 +94,8 @@ export class Engine {
   }
 
   stop(): void {
+    for (const shell of this.shells.values()) shell.close()
+    this.shells.clear()
     this.maintenance.stopAll()
     this.monitor.stop()
     this.snapshots.stop()
@@ -234,6 +238,28 @@ export class Engine {
     cancelJob: async (id) => this.maintenance.cancel(id),
     targetSnapshots: async (id) => this.snapshots.managed(this.targetsOf([id])[0]),
     jobHistory: async () => this.history.recent(200),
+
+    openShell: async (targetId, cols, rows) => {
+      const target = this.targetsOf([targetId])[0]
+      const credential = this.ssh.credentials().find((c) => c.id === target.credentialId)
+      if (!credential) throw new Error('Les identifiants SSH de cette machine sont introuvables.')
+      const id = randomUUID()
+      const handle = await this.remote.openShell(target, credential, this.storedSecrets(credential), { cols, rows },
+        (data) => this.ports.broadcast('shellData', { id, data }),
+        () => {
+          this.shells.delete(id)
+          this.ports.broadcast('shellExit', { id })
+        })
+      this.shells.set(id, handle)
+      this.logger.scope('Shell').info(`Shell ouvert sur ${target.name} (${credential.username}@${target.host})`)
+      return id
+    },
+    shellWrite: async (id, data) => this.shells.get(id)?.write(data),
+    shellResize: async (id, cols, rows) => this.shells.get(id)?.resize({ cols, rows }),
+    shellClose: async (id) => {
+      this.shells.get(id)?.close()
+      this.shells.delete(id)
+    },
 
     listAlerts: async () => this.alerts.list(),
     acknowledgeAlert: async (key) => this.alerts.acknowledge(key),
