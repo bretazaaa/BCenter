@@ -33,7 +33,20 @@ jobs:
       - run: npm test
       - run: npx electron-vite build
 
-      - name: Build and publish the installer
-        run: npx electron-builder --win --x64 --publish always
+      # A single draft release is created up front: electron-builder uploads its assets in parallel
+      # and would otherwise create one release per asset. The release is published once complete,
+      # so installed copies never see a partial release.
+      - name: Create a draft release
+        run: gh release create "${{ github.ref_name }}" --draft --title "BCenter ${{ github.ref_name }}" --generate-notes --verify-tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build the installer and upload it to the draft
+        run: npx electron-builder --win --x64 --publish always -c.publish.releaseType=draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish the release
+        run: gh release edit "${{ github.ref_name }}" --draft=false --latest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
