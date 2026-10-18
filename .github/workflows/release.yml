@@ -25,6 +25,12 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Check that the release token is configured
+        shell: pwsh
+        run: if (-not $env:GH_TOKEN) { throw "The RELEASE_TOKEN secret is missing (Settings > Secrets and variables > Actions)." }
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+
       - name: Check that the tag matches package.json
         shell: pwsh
         run: |
