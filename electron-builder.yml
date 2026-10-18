@@ -1,0 +1,33 @@
+appId: com.bcenter.app
+productName: BCenter
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**
+  - package.json
+extraResources:
+  - from: src/main/tray.ico
+    to: tray.ico
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: BCenter
+  uninstallDisplayName: BCenter
+  deleteAppDataOnUninstall: false
+  artifactName: BCenter-Setup-${version}.${ext}
+# Mises à jour : publiées sous forme de « Releases » GitHub (installeur + latest.yml),
+# lues par electron-updater depuis l'application installée.
+publish:
+  provider: github
+  owner: bretazaaa
+  repo: BCenter
+  releaseType: release
