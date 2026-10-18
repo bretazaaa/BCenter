@@ -1,0 +1,25 @@
+BCenter — Proprietary Software License
+
+Copyright (c) 2026 Bretaza. All rights reserved.
+
+BCenter is free to download and use. This repository hosts the official
+builds and release notes only; the source code is not published.
+
+You may:
+  - install and use BCenter on any number of your own computers, for
+    personal or professional purposes.
+
+You may not:
+  - redistribute, sell, rent or sublicense BCenter or its installers;
+  - modify, decompile, disassemble or reverse engineer BCenter, except where
+    such restriction is prohibited by applicable law;
+  - remove or alter any copyright notice.
+
+BCenter is provided "as is", without warranty of any kind, express or implied,
+including but not limited to the warranties of merchantability, fitness for a
+particular purpose and noninfringement. In no event shall the author be liable
+for any claim, damages or other liability arising from the use of BCenter,
+including any action performed on your servers or virtual machines.
+
+Third-party open-source components bundled with BCenter remain under their
+own licenses.
