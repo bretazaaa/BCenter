@@ -15,6 +15,7 @@ import type {
   NasAction,
   NasKind,
   NasProfile,
+  NasSample,
   NasState,
   PowerAction,
   RemoteSystem,
@@ -150,6 +151,8 @@ export interface BCenterApi {
   refreshNas(): Promise<NasState>
   /** Exécute une action sur le NAS et renvoie le message de résultat. */
   nasAction(nasId: string, action: NasAction): Promise<string>
+  /** Historique des mesures relevées depuis le démarrage de BCenter (24 h au plus). */
+  nasHistory(nasId: string): Promise<NasSample[]>
   linkNasTarget(nasId: string, targetId: string | null): Promise<NasProfile>
 
   // Alertes et journaux

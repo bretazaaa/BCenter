@@ -32,7 +32,7 @@ export class AppUpdater {
 
   async check(): Promise<AppUpdateState> {
     if (!app.isPackaged) return this.set({ state: 'error', message: 'Vérification disponible uniquement dans la version installée.' })
-    if (this.state.state === 'downloading' || this.state.state === 'ready') return this.state
+    if (['checking', 'available', 'downloading', 'ready'].includes(this.state.state)) return this.state
     try {
       await autoUpdater.checkForUpdates()
     } catch (error) {

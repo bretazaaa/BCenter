@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { DialogHost } from './components/dialogs'
 import { ShellWindow } from './components/ShellWindow'
-import { ServerModal, WelcomeModal } from './components/modals'
+import { ServerModal, UpdateModal, WelcomeModal } from './components/modals'
 import { Console, StatusBar, StatusRow, TitleBar, Toasts, Toolbar, type AddKind } from './components/shell'
 import { Logo } from './components/ui'
 import { AlertsPage } from './pages/Alerts'
@@ -35,6 +35,9 @@ export function App() {
   const { ready, settings, page, consoleOpen, version, shell, openShell } = useApp()
   const [adding, setAdding] = useState<AddKind | null>(null)
   const [welcome, setWelcome] = useState(false)
+  const appUpdate = useApp((s) => s.appUpdate)
+  const [updateDismissed, setUpdateDismissed] = useState<string | null>(null)
+  const readyVersion = appUpdate.state === 'ready' ? appUpdate.version : null
 
   useEffect(() => {
     void useApp.getState().init()
@@ -103,6 +106,7 @@ export function App() {
       {adding === 'server' && <ServerModal onClose={() => setAdding(null)} />}
       {adding === 'nas' && <NasModal onClose={() => setAdding(null)} />}
       {adding === 'target' && <AddTargetModal onClose={() => setAdding(null)} />}
+      {readyVersion && readyVersion !== updateDismissed && !welcome && <UpdateModal version={readyVersion} onClose={() => setUpdateDismissed(readyVersion)} />}
       {welcome && (
         <WelcomeModal
           onClose={() => {

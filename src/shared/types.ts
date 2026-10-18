@@ -451,3 +451,15 @@ export type NasAction =
   | { kind: 'scrub'; poolId: string }
   | { kind: 'update' }
   | { kind: 'power'; op: 'reboot' | 'shutdown' }
+
+/** Mesure relevée par BCenter à chaque actualisation d'un NAS (historique conservé en mémoire). */
+export interface NasSample {
+  time: number
+  cpu?: number
+  memUsed?: number
+  memTotal?: number
+  storageUsed: number
+  storageTotal: number
+  temperature?: number
+  diskTemperature?: number
+}

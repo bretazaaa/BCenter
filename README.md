@@ -32,7 +32,8 @@ NAS platforms (TrueNAS, Synology DSM, Unraid, OpenMediaVault, QNAP, Proxmox Back
 
 ## Releasing
 
-1. `npm version patch` (or `minor` / `major`) — creates a commit and a `vX.Y.Z` tag.
+1. Write the release notes in `release-notes/vX.Y.Z.md` (shown on the GitHub release), then
+   `npm version patch` (or `minor` / `major`) — creates a commit and a `vX.Y.Z` tag.
 2. `git push --follow-tags`.
 
 The [Release workflow](.github/workflows/release.yml) builds the installer and publishes it to the public repository's

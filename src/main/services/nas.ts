@@ -1,4 +1,4 @@
-import type { NasAction, NasProfile, NasSnapshot, NasState } from '@shared/types'
+import type { NasAction, NasProfile, NasSample, NasSnapshot, NasState } from '@shared/types'
 import type { ScopedLogger } from '../core/logger'
 import type { NasRepository, SettingsRepository } from '../data/repositories'
 import { secretKeys, type SecretStore } from '../data/secrets'
@@ -7,6 +7,8 @@ import type { AlertEngine } from './alerts'
 
 /** Intervalle minimal entre deux lectures d'un NAS (certaines API sont coûteuses). */
 const MIN_INTERVAL_S = 30
+/** Durée d'historique conservée en mémoire pour le monitoring. */
+const HISTORY_MS = 24 * 3600_000
 
 /**
  * Surveille les NAS enregistrés et exécute les actions demandées. Un pilote (et sa session) est conservé
@@ -15,6 +17,7 @@ const MIN_INTERVAL_S = 30
 export class NasMonitor {
   private systems: NasProfile[] = []
   private snapshots = new Map<string, NasSnapshot>()
+  private readonly samples = new Map<string, NasSample[]>()
   private readonly drivers = new Map<string, { key: string; driver: NasDriver }>()
   private lastRefresh: string | null = null
   private timer: NodeJS.Timeout | null = null
@@ -47,6 +50,7 @@ export class NasMonitor {
         entry.driver.close()
         this.drivers.delete(id)
         this.snapshots.delete(id)
+        this.samples.delete(id)
       }
     }
     this.emit()
@@ -101,9 +105,31 @@ export class NasMonitor {
     }
     const results = await Promise.all(this.systems.map((s) => this.fetch(s)))
     this.snapshots = new Map(results.map((r) => [r.nas.id, r]))
+    for (const r of results.filter((x) => x.reachable)) this.record(r)
     this.lastRefresh = new Date().toISOString()
     this.alerts.evaluateNas(results, this.settings.value)
     this.emit()
+  }
+
+  history(id: string): NasSample[] {
+    return this.samples.get(id) ?? []
+  }
+
+  private record(s: NasSnapshot): void {
+    const pools = s.pools.filter((p) => p.kind !== 'raid')
+    const temps = s.disks.map((d) => d.temperature).filter((t): t is number => t != null)
+    const sample: NasSample = {
+      time: Date.now(),
+      cpu: s.system.cpu,
+      memUsed: s.system.memUsed,
+      memTotal: s.system.memTotal,
+      storageUsed: pools.reduce((n, p) => n + p.used, 0),
+      storageTotal: pools.reduce((n, p) => n + p.total, 0),
+      temperature: s.system.temperature,
+      diskTemperature: temps.length ? Math.max(...temps) : undefined,
+    }
+    const cutoff = sample.time - HISTORY_MS
+    this.samples.set(s.nas.id, [...(this.samples.get(s.nas.id) ?? []).filter((x) => x.time >= cutoff), sample])
   }
 
   private async fetch(nas: NasProfile): Promise<NasSnapshot> {

@@ -46,12 +46,17 @@ jobs:
       # and would otherwise create one release per asset.
       - name: Create a draft release
         shell: pwsh
+        # Release notes: release-notes/vX.Y.Z.md when present.
         run: |
+          $notes = "release-notes/${{ github.ref_name }}.md"
+          if (-not (Test-Path $notes)) { Set-Content $notes "BCenter ${{ github.ref_name }}" -Encoding utf8 }
           gh release view "${{ github.ref_name }}" --repo $env:PUBLIC_REPO *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create "${{ github.ref_name }}" --repo $env:PUBLIC_REPO --draft --target main --title "BCenter ${{ github.ref_name }}" --notes "BCenter ${{ github.ref_name }}"
-            if ($LASTEXITCODE -ne 0) { exit 1 }
+            gh release create "${{ github.ref_name }}" --repo $env:PUBLIC_REPO --draft --target main --title "BCenter ${{ github.ref_name }}" --notes-file $notes
+          } else {
+            gh release edit "${{ github.ref_name }}" --repo $env:PUBLIC_REPO --notes-file $notes
           }
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           exit 0
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}

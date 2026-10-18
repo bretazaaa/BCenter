@@ -1,4 +1,4 @@
-import { BookOpen, HardDrive, Heart, KeyRound, Wrench } from 'lucide-react'
+import { BookOpen, Download, HardDrive, Heart, KeyRound, Wrench } from 'lucide-react'
 import type { ServerProfile } from '@shared/types'
 import { api } from '../lib/api'
 import { useApp } from '../store'
@@ -67,6 +67,37 @@ export function CredentialModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+/** Proposée dès qu'une nouvelle version est téléchargée (vérification au démarrage puis toutes les 6 heures). */
+export function UpdateModal({ version, onClose }: { version: string; onClose: () => void }) {
+  const { jobs, version: current } = useApp()
+  const active = jobs.filter((j) => j.status === 'running' || j.status === 'queued').length
+  return (
+    <Modal
+      title="Mise à jour disponible"
+      width={500}
+      onClose={onClose}
+      footer={
+        <>
+          <span className="spacer" />
+          <button className="btn" onClick={onClose}>Plus tard</button>
+          <button className="btn primary" onClick={() => void api.installAppUpdate()}><Download size={14} /> Installer et redémarrer</button>
+        </>
+      }
+    >
+      <div className="row" style={{ alignItems: 'center', marginBottom: 14 }}>
+        <div className="icon-tile" style={{ width: 44, height: 44 }}><Download size={20} /></div>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>BCenter {version} est prêt</div>
+          <div className="faint">Version installée : {current}</div>
+        </div>
+      </div>
+      <p style={{ margin: 0 }}>La mise à jour s’installe en arrière-plan et BCenter redémarre tout seul en quelques secondes. Vos réglages et serveurs sont conservés.</p>
+      {active > 0 && <p className="error" style={{ marginBottom: 0 }}>{active} tâche(s) de maintenance en cours seront interrompues : attendez leur fin si possible.</p>}
+      <p className="faint" style={{ marginBottom: 0, fontSize: 12 }}>Choisir « Plus tard » : elle reste disponible dans Réglages › Mises à jour de BCenter.</p>
+    </Modal>
+  )
+}
+
 /** Fenêtre d'accueil affichée une fois par version (à la manière de « Quoi de neuf »). */
 export function WelcomeModal({ onClose }: { onClose: () => void }) {
   const { version, navigate } = useApp()
@@ -101,10 +132,16 @@ export function WelcomeModal({ onClose }: { onClose: () => void }) {
       <div className="card" style={{ background: 'var(--panel-2)', padding: '14px 16px' }}>
         <div style={{ fontWeight: 600, marginBottom: 6 }}><BookOpen size={13} style={{ verticalAlign: -2, marginRight: 6 }} />Nouveautés</div>
         <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
-          <li>Nouvelle page <b>NAS</b> : TrueNAS, Synology, Unraid, OpenMediaVault, QNAP et Proxmox Backup Server.</li>
-          <li>Volumes, disques (santé, température), partages et alertes du NAS dans BCenter, avec notifications Windows.</li>
-          <li>Actions directes : services, applications et conteneurs, snapshots, réplications et sauvegardes, scrub, mises à jour, redémarrage.</li>
-          <li>Shell SSH sur le NAS en l’associant à une machine.</li>
+          <li>Vos <b>NAS</b> sur le tableau de bord : stockage, disques, applications et état en un coup d’œil.</li>
+          <li><b>Monitoring des NAS</b> : processeur, mémoire, stockage et températures.</li>
+          <li>Bouton <b>Ajouter</b> : serveur Proxmox, NAS ou machine SSH.</li>
+          <li>Mises à jour de BCenter proposées dès le démarrage, installées sans assistant puis relance automatique.</li>
+        </ul>
+      </div>
+      <div className="card" style={{ background: 'var(--panel-2)', padding: '14px 16px', marginTop: 10 }}>
+        <div style={{ fontWeight: 600, marginBottom: 6 }}>Rappel 0.2.0</div>
+        <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
+          <li>Page <b>NAS</b> : TrueNAS, Synology, Unraid, OpenMediaVault, QNAP et Proxmox Backup Server, avec actions directes.</li>
         </ul>
       </div>
     </Modal>

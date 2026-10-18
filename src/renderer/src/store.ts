@@ -120,6 +120,8 @@ export const useApp = create<AppStore>((set, get) => ({
       api.appInfo(), api.getSettings(), api.getInfra(), api.getNas(), api.listAlerts(), api.listJobs(), api.appLogs(),
     ])
     set({ version: info.version, settings, infra, nas, alerts, jobs, logs, ready: true })
+    // Une mise à jour trouvée pendant l'écran de démarrage a été annoncée avant que l'interface n'écoute.
+    if (settings.checkForUpdates) void api.checkAppUpdate().then((appUpdate) => appUpdate.state !== 'error' && set({ appUpdate })).catch(() => undefined)
     await get().reloadLists()
   },
 

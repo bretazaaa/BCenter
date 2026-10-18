@@ -344,6 +344,7 @@ export class Engine {
       return this.nas.state
     },
     nasAction: (id, action) => this.nas.action(id, action),
+    nasHistory: async (id) => this.nas.history(id),
     linkNasTarget: async (id, targetId) => {
       const nas = this.nasRepo.find(id)
       if (!nas) throw new Error('NAS introuvable.')

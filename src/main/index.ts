@@ -1,3 +1,4 @@
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, safeStorage, shell, Tray } from 'electron'
 import type { ApiResult, BCenterApi, BCenterEvents } from '@shared/api'
@@ -14,7 +15,15 @@ const dataDir =
 
 // En développement, un profil web distinct : `npm run dev` démarre même si la version installée est ouverte
 // (sinon le verrou d'instance unique ferme la copie de développement), tout en partageant la configuration.
-app.setPath('userData', join(dataDir, app.isPackaged ? 'webdata' : 'webdata-dev'))
+// La clé de chiffrement de safeStorage (protégée par DPAPI) est stockée dans « Local State » : on reprend celle
+// du profil principal pour que les secrets déjà enregistrés restent lisibles.
+const webData = join(dataDir, 'webdata')
+const userData = app.isPackaged ? webData : join(dataDir, 'webdata-dev')
+if (!app.isPackaged && existsSync(join(webData, 'Local State'))) {
+  mkdirSync(userData, { recursive: true })
+  copyFileSync(join(webData, 'Local State'), join(userData, 'Local State'))
+}
+app.setPath('userData', userData)
 app.setAppUserModelId('com.bcenter.app')
 
 let engine: Engine | null = null

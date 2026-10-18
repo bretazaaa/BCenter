@@ -1,6 +1,6 @@
-import { AlertTriangle, Box, CheckCircle2, Monitor, Network, Server, Wrench } from 'lucide-react'
+import { AlertTriangle, Box, CheckCircle2, HardDrive, Monitor, Network, Server, Wrench } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import type { RemoteTask } from '@shared/types'
+import { NAS_KINDS, type NasSnapshot, type RemoteTask } from '@shared/types'
 import { TimeChart } from '../components/charts'
 import { Badge, Card, Empty, Stat, StatusBadge, Usage, type BadgeKind } from '../components/ui'
 import { api } from '../lib/api'
@@ -15,7 +15,7 @@ const TASK_LABELS: Record<string, string> = {
 }
 
 export function Dashboard() {
-  const { infra, alerts, scans, jobs, navigate } = useApp()
+  const { infra, nas, alerts, scans, jobs, navigate } = useApp()
   const [tasks, setTasks] = useState<(RemoteTask & { serverName: string })[]>([])
 
   useEffect(() => {
@@ -66,10 +66,15 @@ export function Dashboard() {
       kind: (t.state === 'ok' ? 'success' : t.state === 'running' ? 'accent' : 'danger') as BadgeKind,
       label: t.state === 'ok' ? 'OK' : t.state === 'running' ? 'En cours' : 'Échec', icon: <Server size={14} />,
     }))
-    return [...local, ...remote].sort((a, b) => b.time - a.time).slice(0, 8)
-  }, [jobs, tasks])
+    const storage = nas.snapshots.flatMap((s) => s.tasks.filter((t) => t.lastRun && (t.state === 'ok' || t.state === 'failed' || t.state === 'running')).map((t) => ({
+      time: t.lastRun!, title: t.name, detail: s.nas.name,
+      kind: (t.state === 'ok' ? 'success' : t.state === 'running' ? 'accent' : 'danger') as BadgeKind,
+      label: t.state === 'ok' ? 'OK' : t.state === 'running' ? 'En cours' : 'Échec', icon: <HardDrive size={14} />,
+    })))
+    return [...local, ...remote, ...storage].sort((a, b) => b.time - a.time).slice(0, 8)
+  }, [jobs, tasks, nas])
 
-  if (infra.servers.length === 0) {
+  if (infra.servers.length === 0 && nas.systems.length === 0) {
     return (
       <div className="page" style={{ display: 'grid', placeItems: 'center' }}>
         <Empty icon={<Network size={24} />} title="Aucun serveur Proxmox configuré" message="Ajoutez un serveur Proxmox VE pour afficher l’état de votre infrastructure.">
@@ -156,6 +161,18 @@ export function Dashboard() {
         </Card>
       </div>
 
+      {nas.systems.length > 0 && (
+        <div style={{ marginTop: 14 }}><Card title="NAS" subtitle="Stockage, disques et applications de vos NAS" actions={<button className="btn ghost sm" onClick={() => navigate('nas')}>Tout voir</button>}>
+          {nas.systems.map((n) => (
+            <NasRow key={n.id} name={n.name} kind={NAS_KINDS[n.kind].label.split(' (')[0]} snap={nas.snapshots.find((s) => s.nas.id === n.id)}
+              onClick={() => {
+                localStorage.setItem('bcenter.nas', n.id)
+                navigate('nas')
+              }} />
+          ))}
+        </Card></div>
+      )}
+
       <div className="grid split" style={{ marginTop: 14 }}>
         <Card title="Invités les plus actifs" subtitle="Classés par charge processeur" className="flush">
           <table className="table">
@@ -173,7 +190,7 @@ export function Dashboard() {
             </tbody>
           </table>
         </Card>
-        <Card title="Activité récente" subtitle="Tâches Proxmox et maintenance BCenter">
+        <Card title="Activité récente" subtitle="Tâches Proxmox, NAS et maintenance BCenter">
           {activity.length === 0 && <div className="faint">Aucune activité récente.</div>}
           {activity.map((a, i) => (
             <div key={i} className="row" style={{ alignItems: 'center', marginBottom: 12 }}>
@@ -187,6 +204,39 @@ export function Dashboard() {
           ))}
         </Card>
       </div>
+    </div>
+  )
+}
+
+function NasRow({ name, kind, snap, onClick }: { name: string; kind: string; snap?: NasSnapshot; onClick: () => void }) {
+  const pools = snap?.pools.filter((p) => p.kind !== 'raid') ?? []
+  const used = pools.reduce((s, p) => s + p.used, 0)
+  const total = pools.reduce((s, p) => s + p.total, 0)
+  const disks = snap?.disks ?? []
+  const badDisks = disks.filter((d) => d.health === 'warning' || d.health === 'failing').length
+  const badPools = snap?.pools.filter((p) => p.status === 'degraded' || p.status === 'faulted' || p.status === 'offline').length ?? 0
+  const running = snap?.apps.filter((a) => a.state === 'running').length ?? 0
+  const status: [BadgeKind, string] = !snap ? ['neutral', 'Connexion…'] : !snap.reachable ? ['danger', 'Injoignable'] : badPools || badDisks ? ['warning', 'À vérifier'] : ['success', 'Sain']
+  return (
+    <div className="row clickable" onClick={onClick} style={{ alignItems: 'center', padding: '11px 0', borderBottom: '1px solid var(--border-soft)', cursor: 'pointer' }}>
+      <div className="icon-tile"><HardDrive size={16} /></div>
+      <div style={{ width: 220 }}>
+        <div style={{ fontWeight: 600 }}>{name}</div>
+        <div className="faint" style={{ fontSize: 12 }}>{[kind, snap?.system.model].filter(Boolean).join(' · ')}{snap?.system.uptime ? ` · ${uptime(snap.system.uptime)}` : ''}</div>
+      </div>
+      <div className="grow">
+        <div className="metric-row"><span>Stockage</span><b>{total ? `${bytes(used)} / ${bytes(total)}` : '—'}</b></div>
+        <Usage value={total ? used / total : 0} warn={0.8} />
+      </div>
+      <div style={{ width: 150 }}>
+        <div className="faint" style={{ fontSize: 12 }}>Disques</div>
+        <div style={{ fontWeight: 600, color: badDisks ? 'var(--warning)' : undefined }}>{snap?.reachable ? (badDisks ? `${badDisks} / ${disks.length} à surveiller` : `${disks.length} OK`) : '—'}</div>
+      </div>
+      <div style={{ width: 130 }}>
+        <div className="faint" style={{ fontSize: 12 }}>Applications</div>
+        <div style={{ fontWeight: 600 }}>{snap?.reachable && snap.apps.length ? `${running} / ${snap.apps.length} actives` : '—'}</div>
+      </div>
+      <div style={{ width: 100, textAlign: 'right' }}><Badge kind={status[0]}>{status[1]}</Badge></div>
     </div>
   )
 }
