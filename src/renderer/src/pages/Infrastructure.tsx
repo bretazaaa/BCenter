@@ -42,7 +42,7 @@ export function InfrastructurePage() {
             </div>
             {snap?.error && <div className="callout danger" style={{ marginBottom: 14 }}>{snap.error}</div>}
 
-            <div className="grid three">
+            <div className="grid three" style={{ marginBottom: 14 }}>
               {snap?.nodes.map((n) => {
                 const hosted = guests.filter((g) => g.node === n.name)
                 const mem = n.memTotal ? n.memUsed / n.memTotal : 0
