@@ -52,6 +52,7 @@ export function SettingsPage() {
       : appUpdate.state === 'error' ? `Vérification impossible : ${appUpdate.message}` : ''
 
   return (
+    <>
     <div className="page" style={{ paddingBottom: 90 }}>
       <div className="page-head"><div><h1>Réglages</h1><p>Préférences, serveurs et sécurité</p></div></div>
 
@@ -168,8 +169,11 @@ export function SettingsPage() {
         </div>
       </div>
 
+    </div>
+
+      {/* Hors de la zone défilante : toujours visible en bas de la fenêtre. */}
       {dirty && (
-        <div style={{ position: 'sticky', bottom: -10, marginTop: 18, display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderRadius: 12, background: 'var(--panel-2)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
+        <div className="save-bar">
           <span className="muted">Modifications non enregistrées</span>
           <span style={{ flex: 1 }} />
           <button className="btn ghost" onClick={() => setDraft(saved!)}>Annuler</button>
@@ -180,6 +184,6 @@ export function SettingsPage() {
       {serverModal && <ServerModal server={serverModal === 'new' ? undefined : serverModal} onClose={() => setServerModal(null)} />}
       {credentialModal && <CredentialModal onClose={() => setCredentialModal(false)} />}
       {nasModal && <NasModal nas={nasModal === 'new' ? undefined : nasModal} onClose={() => setNasModal(null)} />}
-    </div>
+    </>
   )
 }

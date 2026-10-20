@@ -408,3 +408,10 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; }
 .tag-input:focus-within { border-color: var(--accent); }
 .tag-input input { flex: 1; min-width: 80px; border: 0; outline: none; background: none; color: var(--text); font: inherit; }
 .tag-dot { width: 9px; height: 9px; border-radius: 50%; margin: 0 3px; }
+
+/* Barre d'enregistrement des réglages, ancrée en bas de la zone de contenu */
+.save-bar {
+  position: absolute; left: 26px; right: 34px; bottom: 16px; z-index: 20; display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--border); box-shadow: var(--shadow);
+  animation: page-in 0.18s ease-out;
+}
