@@ -1,10 +1,7 @@
-# Publishes a new BCenter version to the public distribution repository (bretazaaa/BCenter).
+# Publishes a new BCenter version to this repository's Releases.
 # Push a tag "vX.Y.Z" matching the version in package.json: the workflow runs the checks,
-# builds the Windows installer, uploads it to a draft release in the public repository and
-# publishes it once complete. Installed copies of BCenter then update automatically.
-#
-# Requires the RELEASE_TOKEN secret: a fine-grained token with "Contents: read and write"
-# on bretazaaa/BCenter.
+# builds the Windows installer, uploads it to a draft release and publishes it once complete.
+# Installed copies of BCenter then update automatically. Release notes: release-notes/vX.Y.Z.md.
 name: Release
 
 on:
@@ -12,7 +9,10 @@ on:
     tags: ['v*']
 
 env:
-  PUBLIC_REPO: bretazaaa/BCenter
+  PUBLIC_REPO: ${{ github.repository }}
+
+permissions:
+  contents: write
 
 jobs:
   release:
@@ -24,12 +24,6 @@ jobs:
         with:
           node-version: 24
           cache: npm
-
-      - name: Check that the release token is configured
-        shell: pwsh
-        run: if (-not $env:GH_TOKEN) { throw "The RELEASE_TOKEN secret is missing (Settings > Secrets and variables > Actions)." }
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Check that the tag matches package.json
         shell: pwsh
@@ -59,14 +53,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           exit 0
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
 
       - name: Build the installer and upload it to the draft
         run: npx electron-builder --win --x64 --publish always
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
 
       - name: Publish the release
         run: gh release edit "${{ github.ref_name }}" --repo ${{ env.PUBLIC_REPO }} --draft=false --latest
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_TOKEN: ${{ github.token }}

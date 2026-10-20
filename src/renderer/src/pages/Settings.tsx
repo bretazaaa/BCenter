@@ -149,6 +149,9 @@ export function SettingsPage() {
             <SettingRow title="Source des mises à jour" description="Versions publiées dans les Releases du dépôt GitHub du projet.">
               <button className="btn ghost sm" onClick={() => window.open('https://github.com/bretazaaa/BCenter/releases')}>github.com/bretazaaa/BCenter</button>
             </SettingRow>
+            <SettingRow title="Code source" description="BCenter est un logiciel libre, distribué sous licence GNU GPL v3.">
+              <button className="btn ghost sm" onClick={() => window.open('https://github.com/bretazaaa/BCenter')}>Voir sur GitHub</button>
+            </SettingRow>
             <div className="row" style={{ alignItems: 'center' }}>
               <button className="btn" onClick={() => void attempt(() => api.checkAppUpdate())}><RefreshCw size={14} /> Vérifier maintenant</button>
               {appUpdate.state === 'ready' && <button className="btn primary" onClick={() => void api.installAppUpdate()}><Download size={14} /> Redémarrer et installer</button>}
