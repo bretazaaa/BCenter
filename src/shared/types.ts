@@ -261,6 +261,8 @@ export interface AppSettings {
   notifications: boolean
   refreshInterval: number
   checkForUpdates: boolean
+  /** Installe la nouvelle version dès le démarrage, sans demander (sinon elle est proposée). */
+  autoInstallUpdates: boolean
   snapshotBeforeUpdate: boolean
   snapshotRetentionDays: number
   maxParallelJobs: number
@@ -278,6 +280,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   notifications: true,
   refreshInterval: 15,
   checkForUpdates: true,
+  autoInstallUpdates: true,
   snapshotBeforeUpdate: true,
   snapshotRetentionDays: 7,
   maxParallelJobs: 2,

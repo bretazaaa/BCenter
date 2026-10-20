@@ -41,6 +41,31 @@ export class AppUpdater {
     return this.state
   }
 
+  /**
+   * Au démarrage : cherche une nouvelle version et la télécharge (progression transmise à l'écran de démarrage).
+   * Renvoie la version prête à installer, ou null (à jour, hors ligne, ou téléchargement trop long : il continue
+   * alors en arrière-plan et sera proposé plus tard).
+   */
+  async prepareAtStartup(onProgress: (version: string, percent: number) => void, timeoutMs = 120_000): Promise<string | null> {
+    if (!app.isPackaged) return null
+    try {
+      const result = await Promise.race([autoUpdater.checkForUpdates(), new Promise<null>((r) => setTimeout(() => r(null), 8000))])
+      const version = result?.isUpdateAvailable ? result.updateInfo.version : null
+      if (!version || !result?.downloadPromise) return null
+      const progress = (p: { percent: number }) => onProgress(version, Math.round(p.percent))
+      autoUpdater.on('download-progress', progress)
+      try {
+        const done = await Promise.race([result.downloadPromise.then(() => true), new Promise<false>((r) => setTimeout(() => r(false), timeoutMs))])
+        return done ? version : null
+      } finally {
+        autoUpdater.off('download-progress', progress)
+      }
+    } catch (error) {
+      this.set({ state: 'error', message: (error as Error).message })
+      return null
+    }
+  }
+
   /** Vérification périodique tant que BCenter est lancé. */
   schedule(): void {
     if (this.timer) return

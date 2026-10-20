@@ -147,6 +147,9 @@ export function SettingsPage() {
 
           <Card title="Mises à jour de BCenter" subtitle={`Version installée : ${version}`}>
             <SettingRow title="Vérifier et télécharger automatiquement"><Switch checked={draft.checkForUpdates} onChange={(v) => patch({ checkForUpdates: v })} /></SettingRow>
+            <SettingRow title="Installer automatiquement au démarrage" description="La nouvelle version est installée en silence au lancement de BCenter, qui redémarre tout seul. Sinon, elle vous est proposée.">
+              <Switch checked={draft.autoInstallUpdates} disabled={!draft.checkForUpdates} onChange={(v) => patch({ autoInstallUpdates: v })} />
+            </SettingRow>
             <SettingRow title="Source des mises à jour" description="Versions publiées dans les Releases du dépôt GitHub du projet.">
               <button className="btn ghost sm" onClick={() => window.open('https://github.com/bretazaaa/BCenter/releases')}>github.com/bretazaaa/BCenter</button>
             </SettingRow>

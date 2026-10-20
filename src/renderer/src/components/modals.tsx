@@ -132,6 +132,7 @@ export function WelcomeModal({ onClose }: { onClose: () => void }) {
       <div className="card" style={{ background: 'var(--panel-2)', padding: '14px 16px' }}>
         <div style={{ fontWeight: 600, marginBottom: 6 }}><BookOpen size={13} style={{ verticalAlign: -2, marginRight: 6 }} />Nouveautés</div>
         <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
+          <li><b>Mises à jour automatiques au démarrage</b>, installées en silence puis relance de BCenter.</li>
           <li>Nouvelle page <b>Connexions</b> : toutes vos machines au même endroit, avec dossiers, tags et recherche.</li>
           <li><b>Import</b> depuis XPipe, OpenSSH, PuTTY, WinSCP et MobaXterm, mot de passe saisi une seule fois, connexions testées avant l’ajout.</li>
           <li><b>Terminal à onglets</b> et <b>gestionnaire de fichiers</b> (envoi, téléchargement, glisser-déposer, édition).</li>

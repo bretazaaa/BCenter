@@ -112,6 +112,20 @@ async function boot() {
     const settings = engine.settings.load()
     if (isDemo) seedDemo(engine)
 
+    // Mise à jour automatique : téléchargée puis installée en silence avant même d'ouvrir la fenêtre.
+    if (settings.checkForUpdates && settings.autoInstallUpdates && app.isPackaged) {
+      await step('Recherche d’une nouvelle version de BCenter…', 0.3)
+      const version = await updater.prepareAtStartup((v, percent) => broadcast('startup', { status: `Téléchargement de BCenter ${v}… ${percent} %`, progress: 0.3 + (percent / 100) * 0.1 }))
+      if (version) {
+        await step(`Installation de BCenter ${version}… BCenter va redémarrer.`, 0.4)
+        log.info(`Mise à jour automatique vers ${version}`)
+        quitting = true
+        engine.stop()
+        updater.install()
+        return
+      }
+    }
+
     await step('Vérification du coffre sécurisé Windows (DPAPI)…', 0.4)
     if (!engine.secrets.selfTest()) throw new Error('Le coffre sécurisé Windows (DPAPI) est indisponible pour ce compte utilisateur.')
 
@@ -123,7 +137,7 @@ async function boot() {
       await Promise.race([engine.monitor.refresh(), new Promise((r) => setTimeout(r, 12_000))])
     }
 
-    if (settings.checkForUpdates && app.isPackaged) {
+    if (settings.checkForUpdates && !settings.autoInstallUpdates && app.isPackaged) {
       await step('Recherche d’une nouvelle version de BCenter…', 0.82)
       await Promise.race([updater.check(), new Promise((r) => setTimeout(r, 6000))])
     }
