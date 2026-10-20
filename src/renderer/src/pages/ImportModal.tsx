@@ -137,6 +137,18 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
                 (« Créer depuis la clé » crée des identifiants à partir du fichier de clé détecté).{' '}
                 <button className="btn ghost sm" style={{ height: 22 }} onClick={() => setAddCredential(true)}><KeyRound size={12} /> Ajouter des identifiants</button>
               </Callout>
+              {step === 'select' && credentials.length > 0 && (
+                <div className="row" style={{ alignItems: 'center', marginTop: 12 }}>
+                  <span className="muted" style={{ fontSize: 12.5 }}>Mêmes identifiants pour toutes les connexions sélectionnées :</span>
+                  <select className="select" style={{ width: 280, height: 30 }} value="" onChange={(e) => {
+                    const id = e.target.value
+                    if (id) setCreds((x) => ({ ...x, ...Object.fromEntries(chosen.map((c) => [c.id, id])) }))
+                  }}>
+                    <option value="">— Appliquer à toutes —</option>
+                    {credentialOptions}
+                  </select>
+                </div>
+              )}
               <div style={{ maxHeight: 420, overflow: 'auto', marginTop: 12, border: '1px solid var(--border-soft)', borderRadius: 10 }}>
                 <table className="table">
                   <thead>
