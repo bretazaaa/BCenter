@@ -67,6 +67,13 @@ export interface NasDraft {
   pinnedFingerprint: string | null
 }
 
+export interface TargetPatch {
+  name?: string
+  group?: string | null
+  tags?: string[]
+  credentialId?: string
+}
+
 export interface TargetDraft {
   name: string
   host: string
@@ -74,6 +81,7 @@ export interface TargetDraft {
   credentialId: string
   hostKey: HostKeyInfo
   guest: GuestInfo | null
+  group?: string | null
 }
 
 /**
@@ -122,6 +130,8 @@ export interface BCenterApi {
   /** Lie (ou délie) une machine à un invité Proxmox : active snapshots et raccourcis depuis VM / LXC. */
   linkTarget(targetId: string, guest: GuestInfo | null): Promise<SshTarget>
   setCredentialSudo(credentialId: string, useSudo: boolean): Promise<void>
+  /** Modifie le nom, le dossier, les tags ou les identifiants d'une machine. */
+  updateTarget(targetId: string, patch: TargetPatch): Promise<SshTarget>
 
   // Maintenance
   listJobs(): Promise<JobInfo[]>

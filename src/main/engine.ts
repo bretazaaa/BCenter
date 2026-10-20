@@ -209,7 +209,7 @@ export class Engine {
       const target: SshTarget = {
         id: 'test', name: host, host, port, credentialId: credential.id,
         hostKeyFingerprint: hostKey.fingerprint, hostKeyAlgorithm: hostKey.algorithm,
-        serverId: null, node: null, vmid: null, guestKind: null,
+        serverId: null, node: null, vmid: null, guestKind: null, group: null, tags: [],
       }
       const secrets: SshSecrets = draft.id && !draft.password && !draft.passphrase
         ? this.storedSecrets(credential)
@@ -233,6 +233,8 @@ export class Engine {
         node: draft.guest?.node ?? null,
         vmid: draft.guest?.vmid ?? null,
         guestKind: draft.guest?.kind ?? null,
+        group: draft.group?.trim() || null,
+        tags: [],
       }
       await this.remote.testConnection(target, credential, this.storedSecrets(credential))
       this.ssh.upsertTarget(target)
@@ -251,6 +253,19 @@ export class Engine {
         node: guest?.node ?? null,
         vmid: guest?.vmid ?? null,
         guestKind: guest?.kind ?? null,
+      }
+      this.ssh.upsertTarget(target)
+      return target
+    },
+    updateTarget: async (id, patch) => {
+      const current = this.targetsOf([id])[0]
+      if (patch.credentialId && !this.ssh.credentials().some((c) => c.id === patch.credentialId)) throw new Error('Identifiants SSH introuvables.')
+      const target: SshTarget = {
+        ...current,
+        name: patch.name?.trim() || current.name,
+        group: patch.group === undefined ? current.group : patch.group?.trim() || null,
+        tags: patch.tags ? [...new Set(patch.tags.map((t) => t.trim()).filter(Boolean))] : current.tags,
+        credentialId: patch.credentialId ?? current.credentialId,
       }
       this.ssh.upsertTarget(target)
       return target

@@ -340,7 +340,30 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; }
 .logo { display: block; }
 
 /* ------------------------------------------------------------ Shell SSH */
-.modal.shell-window { width: min(1180px, calc(100vw - 48px)); height: min(760px, calc(100vh - 60px)); max-height: none; }
-.shell-body { flex: 1; min-height: 0; padding: 8px 4px 6px 10px; background: #08090c; border-radius: 0 0 12px 12px; }
-.shell-body .xterm { height: 100%; }
-.shell-body .xterm-viewport { background: #08090c !important; }
+
+/* Terminal central à onglets */
+.terminal-dock { position: relative; flex: none; display: flex; flex-direction: column; background: #08090c; border-top: 1px solid var(--border); min-height: 160px; }
+.terminal-dock .resize { position: absolute; top: -3px; left: 0; right: 0; height: 6px; cursor: ns-resize; z-index: 5; }
+.terminal-dock .tabs { display: flex; align-items: center; gap: 2px; padding: 4px 8px; border-bottom: 1px solid var(--border-soft); background: var(--bg-chrome); }
+.terminal-dock .tab {
+  display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 6px 0 10px; border-radius: 7px; color: var(--text-2);
+  font-size: 12.5px; cursor: pointer; white-space: nowrap;
+}
+.terminal-dock .tab:hover { background: var(--panel-hover); color: var(--text); }
+.terminal-dock .tab.on { background: var(--accent-soft); color: var(--text); }
+.terminal-dock .tab button { display: flex; border: 0; background: none; color: var(--text-3); padding: 3px; border-radius: 4px; }
+.terminal-dock .tab button:hover { background: var(--panel-hover); color: var(--text); }
+.terminal-dock .panes { flex: 1; min-height: 0; position: relative; }
+.terminal-dock .pane { position: absolute; inset: 0; padding: 6px 4px 4px 10px; }
+.terminal-dock .xterm-host { height: 100%; }
+.terminal-dock .xterm-host .xterm { height: 100%; }
+.terminal-dock .xterm-viewport { background: #08090c !important; }
+.terminal-dock .reconnect { position: absolute; top: 8px; right: 16px; z-index: 3; }
+
+/* Dossiers de la page Connexions */
+.folder {
+  display: flex; align-items: center; gap: 9px; width: 100%; height: 32px; padding: 0 10px; border: 0; border-radius: 7px;
+  background: none; color: var(--text-2); font-size: 13px;
+}
+.folder:hover { background: var(--panel-hover); color: var(--text); }
+.folder.on { background: var(--accent-soft); color: var(--text); }

@@ -217,11 +217,13 @@ function JobLogPanel({ jobId, title, lines }: { jobId: string | null; title?: st
 /** Ajout d'une machine : invité Proxmox (facultatif), adresse, identifiants et vérification de la clé d'hôte. */
 export function AddTargetModal({ guest: preselected, initial, onAdded, onClose }: {
   guest?: GuestInfo
-  initial?: { name: string; host: string }
+  initial?: { name?: string; host?: string; group?: string | null }
   onAdded?: (target: SshTarget) => Promise<void> | void
   onClose: () => void
 }) {
-  const { infra, credentials } = useApp()
+  const { infra, credentials, targets } = useApp()
+  const groups = useMemo(() => [...new Set(targets.map((t) => t.group).filter((g): g is string => !!g))].sort(), [targets])
+  const [group, setGroup] = useState(initial?.group ?? '')
   const guests = useMemo(() => infra.snapshots.flatMap((s) => s.guests).filter((g) => !g.template).sort((a, b) => a.vmid - b.vmid), [infra])
   const names = new Map(infra.servers.map((s) => [s.id, s.name]))
   const [guest, setGuest] = useState<GuestInfo | null>(preselected ?? null)
@@ -274,10 +276,10 @@ export function AddTargetModal({ guest: preselected, initial, onAdded, onClose }
 
   const save = () => run(async () => {
     setStatus('Test de la connexion SSH…')
-    const target = await api.addTarget({ name, host: host.trim(), port: Number(port), credentialId, hostKey: hostKey!, guest })
+    const target = await api.addTarget({ name, host: host.trim(), port: Number(port), credentialId, hostKey: hostKey!, guest, group: group.trim() || null })
     await onAdded?.(target)
     await useApp.getState().reloadLists()
-    useApp.getState().toast('success', `${name} ajoutée au centre de mises à jour. Analyse en cours…`)
+    useApp.getState().toast('success', `${name} ajoutée aux connexions. Analyse des mises à jour en cours…`)
     onClose()
   })
 
@@ -305,7 +307,15 @@ export function AddTargetModal({ guest: preselected, initial, onAdded, onClose }
           ))}
         </select>
       </Field>
-      <Field label="Nom"><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="srv-web-01" /></Field>
+      <div className="row">
+        <div className="grow"><Field label="Nom"><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="srv-web-01" /></Field></div>
+        <div className="grow">
+          <Field label="Dossier (facultatif)">
+            <input className="input" list="bcenter-groups" value={group} onChange={(e) => setGroup(e.target.value)} placeholder="Production, Réseau…" />
+            <datalist id="bcenter-groups">{groups.map((g) => <option key={g} value={g} />)}</datalist>
+          </Field>
+        </div>
+      </div>
       <div className="row">
         <div className="grow"><Field label="Adresse SSH"><input className="input" value={host} onChange={(e) => { setHost(e.target.value); resetKey() }} placeholder="192.168.1.20" /></Field></div>
         <div style={{ width: 90 }}><Field label="Port"><input className="input" value={port} onChange={(e) => { setPort(e.target.value); resetKey() }} /></Field></div>

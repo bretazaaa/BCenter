@@ -155,6 +155,9 @@ export interface SshTarget {
   node: string | null
   vmid: number | null
   guestKind: GuestKind | null
+  /** Dossier de rangement dans la page Connexions (null = sans dossier). */
+  group: string | null
+  tags: string[]
 }
 
 export interface HostKeyInfo {

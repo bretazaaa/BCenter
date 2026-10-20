@@ -75,7 +75,7 @@ describe('moteur', () => {
     const server = { id: 's1', name: 'lab', host: 'pve', port: 8006, tokenId: 'a@b!c', pinnedFingerprint: null, createdAt: '' }
     engine.servers.upsert(server)
     engine.ssh.upsertCredential({ id: 'c1', name: 'c', username: 'root', authMethod: 'key', privateKeyPath: 'x', useSudo: true })
-    const linked: SshTarget = { id: 't1', name: 'web', host: 'h', port: 22, credentialId: 'c1', hostKeyFingerprint: 'fp', hostKeyAlgorithm: 'ssh-ed25519', serverId: 's1', node: 'pve01', vmid: 101, guestKind: 'qemu' }
+    const linked: SshTarget = { id: 't1', name: 'web', host: 'h', port: 22, credentialId: 'c1', hostKeyFingerprint: 'fp', hostKeyAlgorithm: 'ssh-ed25519', serverId: 's1', node: 'pve01', vmid: 101, guestKind: 'qemu', group: null, tags: [] }
     const unlinked: SshTarget = { ...linked, id: 't2', name: 'dns', serverId: null, node: null, vmid: null, guestKind: null }
     engine.ssh.upsertTarget(linked)
     engine.ssh.upsertTarget(unlinked)
@@ -134,6 +134,16 @@ describe('moteur', () => {
     ]
     expect(await engine.snapshots.prune()).toBe(1)
     expect(provider.calls).toEqual([`delete:${provider.snapshots[0].name}`])
+  })
+
+  it('connexions : dossier et tags modifiables, adresse et clé d’hôte inchangées', async () => {
+    seed()
+    const updated = await engine.api.updateTarget('t2', { name: ' dns-01 ', group: ' Réseau ', tags: ['dns', ' dns', '', 'lab'] })
+    expect(updated).toMatchObject({ name: 'dns-01', group: 'Réseau', tags: ['dns', 'lab'], host: 'h', hostKeyFingerprint: 'fp' })
+    expect(engine.ssh.targets().find((t) => t.id === 't2')).toMatchObject({ group: 'Réseau', tags: ['dns', 'lab'] })
+    await engine.api.updateTarget('t2', { group: null })
+    expect(engine.ssh.targets().find((t) => t.id === 't2')?.group).toBeNull()
+    await expect(engine.api.updateTarget('t2', { credentialId: 'inconnu' })).rejects.toThrow(/introuvables/)
   })
 
   it('analyse : résultat conservé et résumé', async () => {

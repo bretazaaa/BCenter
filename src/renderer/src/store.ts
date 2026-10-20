@@ -15,7 +15,12 @@ import type {
 } from '@shared/types'
 import { api, on } from './lib/api'
 
-export type Page = 'dashboard' | 'infrastructure' | 'nas' | 'guests' | 'updates' | 'monitoring' | 'alerts' | 'logs' | 'settings'
+export type Page = 'dashboard' | 'infrastructure' | 'nas' | 'connections' | 'guests' | 'updates' | 'monitoring' | 'alerts' | 'logs' | 'settings'
+
+export interface TerminalTab {
+  key: string
+  target: SshTarget
+}
 
 export interface Toast {
   id: number
@@ -25,6 +30,7 @@ export interface Toast {
 
 const MAX_JOB_LOG = 5000
 let toastId = 0
+let terminalId = 0
 let initialized = false
 
 interface AppStore {
@@ -51,7 +57,10 @@ interface AppStore {
   selectedJobId: string | null
   search: string
   toasts: Toast[]
-  shell: SshTarget | null
+  /** Onglets du terminal central (un onglet = une session SSH). */
+  terminals: TerminalTab[]
+  activeTerminal: string | null
+  terminalOpen: boolean
 
   init(): Promise<void>
   navigate(page: Page): void
@@ -63,7 +72,11 @@ interface AppStore {
   saveSettings(settings: AppSettings): Promise<void>
   toast(kind: Toast['kind'], text: string): void
   dismissToast(id: number): void
+  /** Ouvre un nouvel onglet de terminal sur la machine (null masque le terminal). */
   openShell(target: SshTarget | null): void
+  closeTerminal(key: string): void
+  selectTerminal(key: string): void
+  toggleTerminal(open?: boolean): void
 }
 
 export const useApp = create<AppStore>((set, get) => ({
@@ -90,7 +103,9 @@ export const useApp = create<AppStore>((set, get) => ({
   selectedJobId: null,
   search: '',
   toasts: [],
-  shell: null,
+  terminals: [],
+  activeTerminal: null,
+  terminalOpen: false,
 
   async init() {
     if (initialized) return
@@ -163,7 +178,20 @@ export const useApp = create<AppStore>((set, get) => ({
   },
 
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
-  openShell: (shell) => set({ shell }),
+  openShell: (target) => {
+    if (!target) return set({ terminalOpen: false })
+    const key = `t${++terminalId}`
+    set((s) => ({ terminals: [...s.terminals, { key, target }], activeTerminal: key, terminalOpen: true }))
+  },
+  closeTerminal: (key) =>
+    set((s) => {
+      const index = s.terminals.findIndex((t) => t.key === key)
+      const terminals = s.terminals.filter((t) => t.key !== key)
+      const next = s.activeTerminal === key ? (terminals[index] ?? terminals[index - 1])?.key ?? null : s.activeTerminal
+      return { terminals, activeTerminal: next, terminalOpen: s.terminalOpen && terminals.length > 0 }
+    }),
+  selectTerminal: (key) => set({ activeTerminal: key, terminalOpen: true }),
+  toggleTerminal: (open) => set((s) => ({ terminalOpen: open ?? !s.terminalOpen })),
 }))
 
 /** Exécute une opération et affiche l'erreur éventuelle sous forme de notification interne. */

@@ -14,6 +14,15 @@ import { secretKeys, type SecretStore } from './secrets'
 
 type Row = Record<string, unknown>
 
+function parseTags(value: unknown): string[] {
+  try {
+    const tags = JSON.parse(String(value ?? '[]')) as unknown
+    return Array.isArray(tags) ? tags.filter((t): t is string => typeof t === 'string') : []
+  } catch {
+    return []
+  }
+}
+
 export class SettingsRepository {
   private current: AppSettings = { ...DEFAULT_SETTINGS }
 
@@ -124,20 +133,23 @@ export class SshRepository {
       node: (r.node as string | null) ?? null,
       vmid: r.vmid == null ? null : Number(r.vmid),
       guestKind: (r.guest_kind as GuestKind | null) ?? null,
+      group: (r.group_name as string | null) ?? null,
+      tags: parseTags(r.tags),
     }))
   }
 
   upsertTarget(t: SshTarget): void {
     this.db
       .prepare(
-        `INSERT INTO ssh_targets(id, name, host, port, credential_id, host_key_fingerprint, host_key_algorithm, server_id, node, vmid, guest_kind)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO ssh_targets(id, name, host, port, credential_id, host_key_fingerprint, host_key_algorithm, server_id, node, vmid, guest_kind, group_name, tags)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET name = excluded.name, host = excluded.host, port = excluded.port,
            credential_id = excluded.credential_id, host_key_fingerprint = excluded.host_key_fingerprint,
            host_key_algorithm = excluded.host_key_algorithm, server_id = excluded.server_id, node = excluded.node,
-           vmid = excluded.vmid, guest_kind = excluded.guest_kind`,
+           vmid = excluded.vmid, guest_kind = excluded.guest_kind, group_name = excluded.group_name, tags = excluded.tags`,
       )
-      .run(t.id, t.name, t.host, t.port, t.credentialId, t.hostKeyFingerprint, t.hostKeyAlgorithm, t.serverId, t.node, t.vmid, t.guestKind)
+      .run(t.id, t.name, t.host, t.port, t.credentialId, t.hostKeyFingerprint, t.hostKeyAlgorithm, t.serverId, t.node, t.vmid, t.guestKind,
+        t.group, JSON.stringify(t.tags ?? []))
   }
 
   removeTarget(id: string): void {

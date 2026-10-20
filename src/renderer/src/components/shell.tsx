@@ -1,6 +1,6 @@
 import {
   Activity, Bell, CheckCircle2, Copy, HardDrive, Info, LayoutDashboard, Minus, Monitor, Network, Plus, RefreshCw, ScrollText,
-  Search, Settings, Square, Terminal, Wrench, X, XCircle,
+  Search, Settings, Square, SquareTerminal, Terminal, Wrench, X, XCircle,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api } from '../lib/api'
@@ -54,6 +54,7 @@ export function TitleBar({ simple = false, onAdd }: { simple?: boolean; onAdd?: 
             { label: 'Ajouter un NAS…', action: () => onAdd?.('nas') },
             { label: 'Ajouter une machine SSH…', action: () => onAdd?.('target') },
             { label: 'NAS', kbd: 'Ctrl+5', action: () => navigate('nas') },
+            { label: 'Connexions', kbd: 'Ctrl+6', action: () => navigate('connections') },
             { label: 'Actualiser', kbd: 'F5', action: () => void refresh() },
             'sep',
             { label: 'Quitter BCenter', action: () => void api.quit() },
@@ -88,6 +89,7 @@ const NAV: { page: Page; label: string; icon: ReactNode }[] = [
   { page: 'dashboard', label: 'Tableau de bord', icon: <LayoutDashboard size={17} /> },
   { page: 'infrastructure', label: 'Infrastructure', icon: <Network size={17} /> },
   { page: 'nas', label: 'NAS', icon: <HardDrive size={17} /> },
+  { page: 'connections', label: 'Connexions', icon: <SquareTerminal size={17} /> },
   { page: 'guests', label: 'VM / LXC', icon: <Monitor size={17} /> },
   { page: 'updates', label: 'Mises à jour', icon: <Wrench size={17} /> },
   { page: 'monitoring', label: 'Monitoring', icon: <Activity size={17} /> },
@@ -179,7 +181,7 @@ export function StatusRow() {
 }
 
 export function StatusBar() {
-  const { consoleOpen, toggleConsole, refresh, refreshing, jobs, appUpdate, navigate } = useApp()
+  const { consoleOpen, toggleConsole, refresh, refreshing, jobs, appUpdate, navigate, terminals, terminalOpen, toggleTerminal } = useApp()
   const active = jobs.filter((j) => j.status === 'running' || j.status === 'queued').length
   return (
     <footer className="statusbar">
@@ -187,6 +189,11 @@ export function StatusBar() {
       <div className="right">
         {appUpdate.state === 'ready' && (
           <button className="chip on" onClick={() => navigate('settings')}>Mise à jour {appUpdate.version} prête</button>
+        )}
+        {terminals.length > 0 && (
+          <button className={`chip${terminalOpen ? ' on' : ''}`} onClick={() => toggleTerminal()}>
+            <SquareTerminal size={12} /> Terminal ({terminals.length})
+          </button>
         )}
         <button className={`chip${consoleOpen ? ' on' : ''}`} onClick={() => toggleConsole()}>
           <Terminal size={12} /> Console

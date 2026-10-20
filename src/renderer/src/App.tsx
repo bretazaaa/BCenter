@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { DialogHost } from './components/dialogs'
-import { ShellWindow } from './components/ShellWindow'
+import { TerminalDock } from './components/Terminal'
 import { ServerModal, UpdateModal, WelcomeModal } from './components/modals'
 import { Console, StatusBar, StatusRow, TitleBar, Toasts, Toolbar, type AddKind } from './components/shell'
 import { Logo } from './components/ui'
@@ -10,6 +10,7 @@ import { GuestsPage } from './pages/Guests'
 import { InfrastructurePage } from './pages/Infrastructure'
 import { LogsPage } from './pages/Logs'
 import { MonitoringPage } from './pages/Monitoring'
+import { ConnectionsPage } from './pages/Connections'
 import { NasModal, NasPage } from './pages/Nas'
 import { SettingsPage } from './pages/Settings'
 import { AddTargetModal, UpdatesPage } from './pages/Updates'
@@ -21,6 +22,7 @@ const PAGES: Record<Page, () => React.JSX.Element> = {
   dashboard: Dashboard,
   infrastructure: InfrastructurePage,
   nas: NasPage,
+  connections: ConnectionsPage,
   guests: GuestsPage,
   updates: UpdatesPage,
   monitoring: MonitoringPage,
@@ -29,10 +31,10 @@ const PAGES: Record<Page, () => React.JSX.Element> = {
   settings: SettingsPage,
 }
 
-const SHORTCUTS: Record<string, Page> = { '1': 'dashboard', '2': 'infrastructure', '3': 'updates', '4': 'guests', '5': 'nas', ',': 'settings' }
+const SHORTCUTS: Record<string, Page> = { '1': 'dashboard', '2': 'infrastructure', '3': 'updates', '4': 'guests', '5': 'nas', '6': 'connections', ',': 'settings' }
 
 export function App() {
-  const { ready, settings, page, consoleOpen, version, shell, openShell } = useApp()
+  const { ready, settings, page, consoleOpen, version } = useApp()
   const [adding, setAdding] = useState<AddKind | null>(null)
   const [welcome, setWelcome] = useState(false)
   const appUpdate = useApp((s) => s.appUpdate)
@@ -97,12 +99,12 @@ export function App() {
       <main className="content">
         <Current key={page} />
       </main>
+      <TerminalDock />
       {consoleOpen && <Console />}
       <StatusRow />
       <StatusBar />
       <Toasts />
       <DialogHost />
-      {shell && <ShellWindow key={shell.id} target={shell} onClose={() => openShell(null)} />}
       {adding === 'server' && <ServerModal onClose={() => setAdding(null)} />}
       {adding === 'nas' && <NasModal onClose={() => setAdding(null)} />}
       {adding === 'target' && <AddTargetModal onClose={() => setAdding(null)} />}

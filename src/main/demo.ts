@@ -42,10 +42,10 @@ export function seedDemo(engine: Engine): void {
   engine.ssh.upsertCredential({ id: DEMO_CREDENTIAL_ID, name: 'Identifiants par défaut', username: 'root', authMethod: 'key', privateKeyPath: 'C:\\demo\\id_ed25519', useSudo: true })
   const base = { port: 22, credentialId: DEMO_CREDENTIAL_ID, hostKeyFingerprint: 'uK6t3m0gVnq3xGQm1c4rXq8wVJ1kq0Yb9f0dE7mZp2s', hostKeyAlgorithm: 'ssh-ed25519' }
   const targets: SshTarget[] = [
-    { ...base, id: 'demo-web', name: 'web-01', host: '10.0.0.21', serverId: DEMO_SERVER_ID, node: 'pve01', vmid: 101, guestKind: 'qemu' },
-    { ...base, id: 'demo-db', name: 'db-01', host: '10.0.0.22', serverId: DEMO_SERVER_ID, node: 'pve02', vmid: 102, guestKind: 'qemu' },
-    { ...base, id: 'demo-dns', name: 'dns', host: '10.0.0.53', serverId: DEMO_SERVER_ID, node: 'pve01', vmid: 103, guestKind: 'lxc' },
-    { ...base, id: 'demo-nas', name: 'nas-legacy', host: '10.0.0.80', serverId: null, node: null, vmid: null, guestKind: null },
+    { ...base, id: 'demo-web', name: 'web-01', host: '10.0.0.21', serverId: DEMO_SERVER_ID, node: 'pve01', vmid: 101, guestKind: 'qemu', group: 'Production', tags: ['web', 'nginx'] },
+    { ...base, id: 'demo-db', name: 'db-01', host: '10.0.0.22', serverId: DEMO_SERVER_ID, node: 'pve02', vmid: 102, guestKind: 'qemu', group: 'Production', tags: ['postgres'] },
+    { ...base, id: 'demo-dns', name: 'dns', host: '10.0.0.53', serverId: DEMO_SERVER_ID, node: 'pve01', vmid: 103, guestKind: 'lxc', group: 'Réseau', tags: ['dns'] },
+    { ...base, id: 'demo-nas', name: 'nas-legacy', host: '10.0.0.80', serverId: null, node: null, vmid: null, guestKind: null, group: 'Stockage', tags: [] },
   ]
   for (const t of targets) engine.ssh.upsertTarget(t)
 }

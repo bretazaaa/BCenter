@@ -33,6 +33,10 @@ const MIGRATIONS = [
     protocol TEXT NOT NULL, username TEXT NULL, pinned_fingerprint TEXT NULL, ssh_target_id TEXT NULL, created_at TEXT NOT NULL
   );
   `,
+  `
+  ALTER TABLE ssh_targets ADD COLUMN group_name TEXT NULL;
+  ALTER TABLE ssh_targets ADD COLUMN tags TEXT NOT NULL DEFAULT '[]';
+  `,
 ]
 
 export type Database = DatabaseSync
