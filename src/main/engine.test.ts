@@ -32,6 +32,7 @@ class FakeProvider implements Partial<VirtualizationProvider> {
 
 class FakeRemote implements Partial<RemoteMaintenance> {
   calls: string[] = []
+  testConnection?: RemoteMaintenance['testConnection']
   async upgrade(t: SshTarget) { this.calls.push(`upgrade:${t.name}`); return { rebootRequired: true } }
   async scan(t: SshTarget): Promise<ScanResult> {
     return { targetId: t.id, scannedAt: '', packages: [{ name: 'openssl', security: true }], rebootRequired: false, system: { hostname: t.name, packageManager: 'apt', isRoot: true } }
@@ -144,6 +145,29 @@ describe('moteur', () => {
     await engine.api.updateTarget('t2', { group: null })
     expect(engine.ssh.targets().find((t) => t.id === 't2')?.group).toBeNull()
     await expect(engine.api.updateTarget('t2', { credentialId: 'inconnu' })).rejects.toThrow(/introuvables/)
+  })
+
+  it('import : mot de passe saisi une fois, vérifié avant l’ajout, chiffré', async () => {
+    const hostKey = { host: '', port: 22, algorithm: 'ssh-ed25519', fingerprint: 'fp' }
+    const candidate = (name: string, host: string) => ({ id: name, source: 'xpipe' as const, name, host, port: 22, username: 'bob', keyPath: null, group: 'Lab', existingTargetId: null })
+    remote.testConnection = async (t) => {
+      if (t.host === 'down') throw new Error('Authentification SSH refusée')
+      return { hostname: t.name, packageManager: 'apt' as const, isRoot: false }
+    }
+    const result = await engine.api.importConnections([
+      { candidate: candidate('a', 'h1'), hostKey, credentialId: 'password', password: 'p4ss-import' },
+      { candidate: candidate('b', 'h2'), hostKey, credentialId: 'password', password: 'p4ss-import' },
+      { candidate: candidate('c', 'down'), hostKey, credentialId: 'password', password: 'autre' },
+    ])
+    expect(result.added).toBe(2)
+    expect(result.errors.map((e) => e.name)).toEqual(['c'])
+    // Un seul identifiant pour le même utilisateur et mot de passe ; celui de l'échec est supprimé.
+    const creds = engine.ssh.credentials()
+    expect(creds).toHaveLength(1)
+    expect(engine.secrets.get(secretKeys.sshPassword(creds[0].id))).toBe('p4ss-import')
+    expect(engine.ssh.targets().map((t) => [t.name, t.group, t.tags])).toEqual([['a', 'Lab', ['xpipe']], ['b', 'Lab', ['xpipe']]])
+    engine.db.exec('PRAGMA wal_checkpoint(FULL)')
+    expect(readFileSync(join(dir, 'bcenter.sqlite')).includes('p4ss-import')).toBe(false)
   })
 
   it('analyse : résultat conservé et résumé', async () => {

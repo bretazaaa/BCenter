@@ -4,6 +4,7 @@ import type {
   AppSettings,
   AppUpdateState,
   CertificateInfo,
+  DetachSpec,
   GuestInfo,
   HostKeyInfo,
   ImportCandidate,
@@ -23,6 +24,7 @@ import type {
   NasSample,
   NasState,
   PowerAction,
+  RemoteFile,
   RemoteSystem,
   RemoteTask,
   ScanResult,
@@ -161,6 +163,27 @@ export interface BCenterApi {
   shellWrite(sessionId: string, data: string): Promise<void>
   shellResize(sessionId: string, cols: number, rows: number): Promise<void>
   shellClose(sessionId: string): Promise<void>
+  /** Reprend une session existante (fenêtre détachée) ; renvoie la sortie déjà affichée. */
+  shellAttach(sessionId: string): Promise<string>
+
+  // Fichiers distants (SFTP)
+  fsOpen(targetId: string): Promise<{ id: string; home: string }>
+  fsList(fsId: string, path: string): Promise<RemoteFile[]>
+  fsMkdir(fsId: string, path: string): Promise<void>
+  fsRename(fsId: string, from: string, to: string): Promise<void>
+  fsDelete(fsId: string, paths: string[]): Promise<void>
+  fsReadText(fsId: string, path: string): Promise<string>
+  fsWriteText(fsId: string, path: string, content: string): Promise<void>
+  /** Télécharge vers un emplacement choisi dans une boîte de dialogue ; renvoie le dossier ou fichier local (null si annulé). */
+  fsDownload(fsId: string, paths: string[]): Promise<string | null>
+  /** Envoie des fichiers choisis dans une boîte de dialogue ; renvoie le nombre d'éléments envoyés. */
+  fsUpload(fsId: string, remoteDir: string, folders: boolean): Promise<number>
+  /** Envoie des fichiers ou dossiers locaux déposés dans la fenêtre. */
+  fsUploadPaths(fsId: string, remoteDir: string, localPaths: string[]): Promise<number>
+  fsClose(fsId: string): Promise<void>
+
+  /** Ouvre un terminal ou un gestionnaire de fichiers dans une fenêtre séparée. */
+  openDetached(spec: DetachSpec): Promise<void>
 
   // NAS
   listNas(): Promise<NasProfile[]>
@@ -200,6 +223,7 @@ export interface BCenterEvents {
   navigate: string
   shellData: { id: string; data: string }
   shellExit: { id: string }
+  fsProgress: { id: string; file: string; transferred: number; total: number }
 }
 
 export type ApiResult<T> = { ok: true; value: T } | { ok: false; error: string }

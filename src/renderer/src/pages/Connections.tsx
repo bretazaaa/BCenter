@@ -27,7 +27,7 @@ function typeOf(t: SshTarget, nas: NasProfile[]): { label: string; icon: React.R
  * et suggestions pour les invités Proxmox et NAS pas encore configurés.
  */
 export function ConnectionsPage() {
-  const { targets, credentials, infra, nas, scans, openShell, navigate, reloadLists } = useApp()
+  const { targets, credentials, infra, nas, scans, openShell, openFiles, navigate, reloadLists } = useApp()
   const [filter, setFilter] = useState<Filter>(ALL)
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<SshTarget | null>(null)
@@ -161,6 +161,7 @@ export function ConnectionsPage() {
                         <td>
                           <div className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>
                             <button className="btn sm" onClick={() => openShell(t)}><TerminalSquare size={13} /> Shell</button>
+                            <button className="btn sm" onClick={() => openFiles(t)}><FolderOpen size={13} /> Fichiers</button>
                             <button className="btn ghost sm icon" title="Mises à jour" onClick={() => navigate('updates')}><Wrench size={13} /></button>
                             <button className="btn ghost sm icon" title="Modifier" onClick={() => setEditing(t)}><Pencil size={13} /></button>
                             <button className="btn ghost sm icon" title="Supprimer" onClick={() => void remove(t)}><Trash2 size={13} /></button>
@@ -173,7 +174,7 @@ export function ConnectionsPage() {
               </table>
             </Card>
           )}
-          <div className="faint" style={{ fontSize: 12, marginTop: 10 }}>Double-cliquez sur une connexion pour ouvrir un shell. Les sessions s’ouvrent dans le terminal en bas de la fenêtre.</div>
+          <div className="faint" style={{ fontSize: 12, marginTop: 10 }}>Double-cliquez sur une connexion pour ouvrir un shell. Terminaux et fichiers s’ouvrent dans le panneau du bas, détachable dans sa propre fenêtre.</div>
         </div>
       </div>
 

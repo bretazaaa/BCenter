@@ -512,12 +512,34 @@ export interface ImportProbe {
 export interface ImportItem {
   candidate: ImportCandidate
   hostKey: HostKeyInfo
-  /** Identifiants existants, ou « auto-key » pour créer des identifiants à partir de la clé détectée. */
+  /** Identifiants existants, « auto-key » (créés depuis la clé détectée) ou « password » (créés avec le mot de passe saisi). */
   credentialId: string
+  /** Mot de passe SSH saisi lors de l'import (credentialId = « password »), chiffré dès réception. */
+  password?: string
 }
 
 export interface ImportResult {
   added: number
   linkedToProxmox: number
   errors: { name: string; message: string }[]
+}
+
+// ---------------------------------------------------------------- Fichiers distants (SFTP)
+
+export interface RemoteFile {
+  name: string
+  path: string
+  type: 'dir' | 'file' | 'link'
+  size: number
+  modified: number
+  /** Droits au format ls (drwxr-xr-x). */
+  mode: string
+}
+
+/** Fenêtre détachée : terminal (session existante ou nouvelle) ou gestionnaire de fichiers. */
+export interface DetachSpec {
+  kind: 'shell' | 'files'
+  targetId: string
+  sessionId?: string
+  path?: string
 }

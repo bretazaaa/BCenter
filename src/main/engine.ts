@@ -20,6 +20,7 @@ import { SnapshotManager } from './services/snapshots'
 import type { VirtualizationProvider } from './services/provider'
 import { SshMaintenance, type RemoteMaintenance, type ShellHandle, type SshSecrets } from './ssh/client'
 import { discover, knownHostFingerprints } from './ssh/importers'
+import type { FileSession } from './ssh/sftp'
 
 export interface EnginePorts {
   dataDir: string
@@ -34,8 +35,11 @@ export interface EnginePorts {
 
 export type EngineApi = Omit<
   BCenterApi,
-  'windowMinimize' | 'windowToggleMaximize' | 'windowClose' | 'appInfo' | 'openPath' | 'pickPrivateKey' | 'quit' | 'checkAppUpdate' | 'installAppUpdate' | 'saveSettings'
+  'windowMinimize' | 'windowToggleMaximize' | 'windowClose' | 'appInfo' | 'openPath' | 'pickPrivateKey' | 'quit' | 'checkAppUpdate' | 'installAppUpdate' | 'saveSettings' | 'fsDownload' | 'fsUpload' | 'openDetached'
 >
+
+/** Taille de la fin de sortie conservée par session de terminal (reprise dans une fenêtre détachée). */
+const SHELL_BUFFER = 256 * 1024
 
 /**
  * Moteur BCenter : composition des services (sans dépendance à Electron, hors chiffrement et notifications
@@ -59,7 +63,8 @@ export class Engine {
   readonly nas: NasMonitor
   readonly logsDir: string
 
-  private readonly shells = new Map<string, ShellHandle>()
+  private readonly shells = new Map<string, { handle: ShellHandle; buffer: string }>()
+  private readonly files = new Map<string, FileSession>()
   /** Jetons d'appareil obtenus lors d'un test (validation en deux étapes), en attente d'enregistrement. */
   private readonly pendingDevices = new Map<string, string>()
   private readonly nasFactory: NasDriverFactory
@@ -111,7 +116,9 @@ export class Engine {
   }
 
   stop(): void {
-    for (const shell of this.shells.values()) shell.close()
+    for (const shell of this.shells.values()) shell.handle.close()
+    for (const session of this.files.values()) session.close()
+    this.files.clear()
     this.shells.clear()
     this.maintenance.stopAll()
     this.nas.stop()
@@ -312,33 +319,72 @@ export class Engine {
     importConnections: async (items) => {
       const result: ImportResult = { added: 0, linkedToProxmox: 0, errors: [] }
       const guests = this.monitor.state.snapshots.flatMap((s) => s.guests).filter((g) => !g.template)
-      for (const { candidate: c, hostKey, credentialId } of items) {
+      const created = new Map<string, SshCredential>()
+      const prepared: { target: SshTarget; credential: SshCredential; name: string; linked: boolean }[] = []
+
+      // 1. Identifiants : existants, créés depuis une clé, ou créés avec le mot de passe saisi (un seul par couple utilisateur / mot de passe).
+      for (const { candidate: c, hostKey, credentialId, password } of items) {
         try {
           if (this.ssh.targets().some((t) => t.host.toLowerCase() === c.host.toLowerCase() && t.port === c.port)) throw new Error('Connexion déjà présente.')
-          let credential = this.ssh.credentials().find((x) => x.id === credentialId)
-          if (credentialId === 'auto-key') {
+          let credential: SshCredential | undefined
+          if (credentialId === 'password') {
+            if (!c.username || !password) throw new Error('Utilisateur ou mot de passe manquant.')
+            const key = `${c.username}\u0000${password}`
+            credential = created.get(key)
+            if (!credential) {
+              credential = { id: randomUUID(), name: `${c.username} (import)`, username: c.username, authMethod: 'password', privateKeyPath: null, useSudo: true }
+              this.ssh.upsertCredential(credential)
+              this.secrets.set(secretKeys.sshPassword(credential.id), password)
+              created.set(key, credential)
+            }
+          } else if (credentialId === 'auto-key') {
             if (!c.keyPath || !c.username) throw new Error('Clé ou utilisateur manquant : choisissez des identifiants.')
             credential = this.ssh.credentials().find((x) => x.authMethod === 'key' && x.username === c.username && x.privateKeyPath === c.keyPath)
             if (!credential) {
               credential = { id: randomUUID(), name: `${c.username} · ${basename(c.keyPath)}`, username: c.username, authMethod: 'key', privateKeyPath: c.keyPath, useSudo: true }
               this.ssh.upsertCredential(credential)
+              created.set(`key\u0000${credential.id}`, credential)
             }
+          } else {
+            credential = this.ssh.credentials().find((x) => x.id === credentialId)
           }
           if (!credential) throw new Error('Identifiants SSH introuvables.')
           // Rattachement automatique à l'invité Proxmox du même nom (snapshots avant mise à jour).
           const guest = guests.find((g) => g.name.toLowerCase() === c.name.toLowerCase())
-          this.ssh.upsertTarget({
-            id: randomUUID(), name: c.name, host: c.host, port: c.port, credentialId: credential.id,
-            hostKeyFingerprint: hostKey.fingerprint, hostKeyAlgorithm: hostKey.algorithm,
-            serverId: guest?.serverId ?? null, node: guest?.node ?? null, vmid: guest?.vmid ?? null, guestKind: guest?.kind ?? null,
-            group: c.group, tags: [c.source === 'ssh-config' ? 'ssh-config' : c.source],
+          prepared.push({
+            name: c.name,
+            credential,
+            linked: !!guest,
+            target: {
+              id: randomUUID(), name: c.name, host: c.host, port: c.port, credentialId: credential.id,
+              hostKeyFingerprint: hostKey.fingerprint, hostKeyAlgorithm: hostKey.algorithm,
+              serverId: guest?.serverId ?? null, node: guest?.node ?? null, vmid: guest?.vmid ?? null, guestKind: guest?.kind ?? null,
+              group: c.group, tags: [c.source],
+            },
           })
-          result.added++
-          if (guest) result.linkedToProxmox++
         } catch (error) {
           result.errors.push({ name: c.name, message: (error as Error).message })
         }
       }
+
+      // 2. Vérification : connexion et authentification réelles avant l'ajout (par lots en parallèle).
+      for (let i = 0; i < prepared.length; i += 6) {
+        await Promise.all(prepared.slice(i, i + 6).map(async (p) => {
+          try {
+            await this.remote.testConnection(p.target, p.credential, this.storedSecrets(p.credential))
+            this.ssh.upsertTarget(p.target)
+            result.added++
+            if (p.linked) result.linkedToProxmox++
+          } catch (error) {
+            result.errors.push({ name: p.name, message: (error as Error).message })
+          }
+        }))
+      }
+
+      // 3. Identifiants créés pour cet import mais utilisés par aucune connexion ajoutée : supprimés.
+      const used = new Set(this.ssh.targets().map((t) => t.credentialId))
+      for (const credential of created.values()) if (!used.has(credential.id)) this.ssh.removeCredential(credential.id)
+
       this.logger.scope('Connexions').info(`Import : ${result.added} connexion(s) ajoutée(s), ${result.errors.length} ignorée(s)`)
       return result
     },
@@ -367,21 +413,58 @@ export class Engine {
       const credential = this.ssh.credentials().find((c) => c.id === target.credentialId)
       if (!credential) throw new Error('Les identifiants SSH de cette machine sont introuvables.')
       const id = randomUUID()
-      const handle = await this.remote.openShell(target, credential, this.storedSecrets(credential), { cols, rows },
-        (data) => this.ports.broadcast('shellData', { id, data }),
+      const entry = { handle: null as unknown as ShellHandle, buffer: '' }
+      entry.handle = await this.remote.openShell(target, credential, this.storedSecrets(credential), { cols, rows },
+        (data) => {
+          // Fin de sortie conservée pour une fenêtre qui reprendrait la session (terminal détaché).
+          entry.buffer = (entry.buffer + data).slice(-SHELL_BUFFER)
+          this.ports.broadcast('shellData', { id, data })
+        },
         () => {
           this.shells.delete(id)
           this.ports.broadcast('shellExit', { id })
         })
-      this.shells.set(id, handle)
+      this.shells.set(id, entry)
       this.logger.scope('Shell').info(`Shell ouvert sur ${target.name} (${credential.username}@${target.host})`)
       return id
     },
-    shellWrite: async (id, data) => this.shells.get(id)?.write(data),
-    shellResize: async (id, cols, rows) => this.shells.get(id)?.resize({ cols, rows }),
+    shellWrite: async (id, data) => this.shells.get(id)?.handle.write(data),
+    shellResize: async (id, cols, rows) => this.shells.get(id)?.handle.resize({ cols, rows }),
     shellClose: async (id) => {
-      this.shells.get(id)?.close()
+      this.shells.get(id)?.handle.close()
       this.shells.delete(id)
+    },
+    shellAttach: async (id) => {
+      const entry = this.shells.get(id)
+      if (!entry) throw new Error('Cette session est terminée.')
+      return entry.buffer
+    },
+
+    fsOpen: async (targetId) => {
+      const target = this.targetsOf([targetId])[0]
+      const credential = this.ssh.credentials().find((c) => c.id === target.credentialId)
+      if (!credential) throw new Error('Les identifiants SSH de cette machine sont introuvables.')
+      const session = await this.remote.openSftp(target, credential, this.storedSecrets(credential))
+      const id = randomUUID()
+      this.files.set(id, session)
+      this.logger.scope('Fichiers').info(`Gestionnaire de fichiers ouvert sur ${target.name}`)
+      return { id, home: await session.home().catch(() => '/') }
+    },
+    fsList: async (id, path) => this.fileSession(id).list(path),
+    fsMkdir: async (id, path) => this.fileSession(id).mkdir(path),
+    fsRename: async (id, from, to) => this.fileSession(id).rename(from, to),
+    fsDelete: async (id, paths) => {
+      for (const path of paths) await this.fileSession(id).remove(path)
+    },
+    fsReadText: async (id, path) => this.fileSession(id).readText(path, 2 * 1024 * 1024),
+    fsWriteText: async (id, path, content) => this.fileSession(id).writeText(path, content),
+    fsUploadPaths: async (id, remoteDir, localPaths) => {
+      for (const local of localPaths) await this.fileSession(id).upload(local, remoteDir, this.progress(id))
+      return localPaths.length
+    },
+    fsClose: async (id) => {
+      this.files.get(id)?.close()
+      this.files.delete(id)
     },
 
     listNas: async () => this.nasRepo.list(),
@@ -445,6 +528,28 @@ export class Engine {
     listAlerts: async () => this.alerts.list(),
     acknowledgeAlert: async (key) => this.alerts.acknowledge(key),
     appLogs: async () => this.logger.recent,
+  }
+
+  /** Téléchargement vers un emplacement local (choisi par l'hôte via une boîte de dialogue). */
+  async downloadTo(fsId: string, remotePaths: string[], local: string, single: boolean): Promise<void> {
+    const session = this.fileSession(fsId)
+    for (const remote of remotePaths) await session.download(remote, single ? local : join(local, remote.split('/').pop() || 'fichier'), this.progress(fsId))
+  }
+
+  private fileSession(id: string): FileSession {
+    const session = this.files.get(id)
+    if (!session) throw new Error('La session de fichiers est fermée : rouvrez le gestionnaire.')
+    return session
+  }
+
+  private progress(id: string) {
+    let last = 0
+    return (file: string, transferred: number, total: number) => {
+      // Au plus 10 notifications par seconde.
+      if (transferred < total && Date.now() - last < 100) return
+      last = Date.now()
+      this.ports.broadcast('fsProgress', { id, file, transferred, total })
+    }
   }
 
   private storedSecrets(credential: SshCredential): SshSecrets {

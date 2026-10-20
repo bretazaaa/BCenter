@@ -23,10 +23,15 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
   const [approved, setApproved] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [addCredential, setAddCredential] = useState(false)
+  const [passwords, setPasswords] = useState<Record<string, string>>({})
+  const [sharedPassword, setSharedPassword] = useState('')
+  const [failures, setFailures] = useState<{ name: string; message: string }[]>([])
 
+  // Par défaut : identifiants du même utilisateur, sinon création depuis la clé détectée, sinon saisie du mot de passe.
   const defaultCredential = (c: ImportCandidate) =>
     credentials.find((x) => c.username && x.username === c.username && (!c.keyPath || x.privateKeyPath === c.keyPath))?.id
-    ?? (c.keyPath && c.username ? 'auto-key' : credentials.find((x) => x.username === c.username)?.id ?? credentials[0]?.id ?? '')
+    ?? (c.keyPath && c.username ? 'auto-key' : c.username ? 'password' : credentials[0]?.id ?? '')
+  const passwordOf = (id: string) => passwords[id] || sharedPassword
 
   useEffect(() => {
     api.discoverImports().then(
@@ -52,7 +57,7 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
   const chosen = candidates.filter((c) => selected.has(c.id))
   const reviewed = chosen.filter((c) => probes[c.id]?.hostKey)
   const needsApproval = reviewed.some((c) => probes[c.id].knownHosts !== 'match')
-  const missingCredential = chosen.some((c) => !creds[c.id])
+  const missingCredential = chosen.some((c) => !creds[c.id] || (creds[c.id] === 'password' && !passwordOf(c.id)))
 
   const toggle = (id: string, on: boolean) => setSelected((s) => {
     const next = new Set(s)
@@ -79,14 +84,23 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
 
   const run = async () => {
     setStep('importing')
+    setFailures([])
     try {
-      const result = await api.importConnections(reviewed.map((c) => ({ candidate: c, hostKey: probes[c.id].hostKey!, credentialId: creds[c.id] })))
+      const result = await api.importConnections(reviewed.map((c) => ({
+        candidate: c, hostKey: probes[c.id].hostKey!, credentialId: creds[c.id],
+        password: creds[c.id] === 'password' ? passwordOf(c.id) : undefined,
+      })))
       await useApp.getState().reloadLists()
-      const parts = [`${result.added} connexion(s) importée(s)`]
-      if (result.linkedToProxmox) parts.push(`${result.linkedToProxmox} liée(s) à un invité Proxmox`)
-      if (result.errors.length) parts.push(`${result.errors.length} ignorée(s) : ${result.errors.map((e) => `${e.name} (${e.message})`).join(', ')}`)
-      useApp.getState().toast(result.errors.length && !result.added ? 'error' : 'success', `${parts.join(' · ')}.`)
-      onClose()
+      if (result.added) {
+        const linked = result.linkedToProxmox ? ` dont ${result.linkedToProxmox} liée(s) à un invité Proxmox` : ''
+        useApp.getState().toast('success', `${result.added} connexion(s) vérifiée(s) et importée(s)${linked}.`)
+      }
+      if (result.errors.length === 0) return onClose()
+      // Échecs (mot de passe refusé…) : la fenêtre reste ouverte pour corriger et réessayer.
+      const failed = new Set(result.errors.map((e) => e.name))
+      setCandidates((list) => list.filter((c) => !reviewed.includes(c) || failed.has(c.name)))
+      setFailures(result.errors)
+      setStep('select')
     } catch (e) {
       setError((e as Error).message)
       setStep('review')
@@ -107,7 +121,7 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
           <button className="btn" onClick={onClose}>Annuler</button>
           {step === 'review' || step === 'importing' ? (
             <button className="btn primary" disabled={step === 'importing' || reviewed.length === 0 || missingCredential || (needsApproval && !approved)} onClick={() => void run()}>
-              <Download size={14} /> Importer {reviewed.length} connexion(s)
+              <Download size={14} /> Vérifier et importer {reviewed.length} connexion(s)
             </button>
           ) : (
             <button className="btn primary" disabled={step !== 'select' || chosen.length === 0 || missingCredential} onClick={() => void probe()}>
@@ -133,20 +147,25 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
           ) : (
             <>
               <Callout>
-                Les mots de passe ne sont pas importés : ils restent dans le coffre chiffré de chaque logiciel. Choisissez les identifiants BCenter à utiliser
-                (« Créer depuis la clé » crée des identifiants à partir du fichier de clé détecté).{' '}
+                Les mots de passe restent dans le coffre chiffré de chaque logiciel : saisissez-les ici (une seule fois pour toutes les machines qui partagent le même),
+                ou choisissez des identifiants BCenter existants. Chaque connexion est testée avant d’être ajoutée.{' '}
                 <button className="btn ghost sm" style={{ height: 22 }} onClick={() => setAddCredential(true)}><KeyRound size={12} /> Ajouter des identifiants</button>
               </Callout>
-              {step === 'select' && credentials.length > 0 && (
-                <div className="row" style={{ alignItems: 'center', marginTop: 12 }}>
-                  <span className="muted" style={{ fontSize: 12.5 }}>Mêmes identifiants pour toutes les connexions sélectionnées :</span>
+              {step === 'select' && (
+                <div className="row" style={{ alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
+                  <span className="muted" style={{ fontSize: 12.5 }}>Pour toutes les connexions sélectionnées :</span>
                   <select className="select" style={{ width: 280, height: 30 }} value="" onChange={(e) => {
                     const id = e.target.value
                     if (id) setCreds((x) => ({ ...x, ...Object.fromEntries(chosen.map((c) => [c.id, id])) }))
                   }}>
                     <option value="">— Appliquer à toutes —</option>
+                    <option value="password">Mot de passe (saisi une seule fois)</option>
                     {credentialOptions}
                   </select>
+                  {chosen.some((c) => creds[c.id] === 'password') && (
+                    <input className="input" type="password" style={{ width: 240, height: 30 }} placeholder="Mot de passe commun"
+                      value={sharedPassword} onChange={(e) => setSharedPassword(e.target.value)} />
+                  )}
                 </div>
               )}
               <div style={{ maxHeight: 420, overflow: 'auto', marginTop: 12, border: '1px solid var(--border-soft)', borderRadius: 10 }}>
@@ -173,8 +192,14 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
                               onChange={(e) => setCreds((x) => ({ ...x, [c.id]: e.target.value }))}>
                               <option value="">— Choisir —</option>
                               {c.keyPath && c.username && <option value="auto-key">Créer depuis la clé ({c.keyPath.split(/[\\/]/).pop()})</option>}
+                              {c.username && <option value="password">Mot de passe de {c.username}…</option>}
                               {credentialOptions}
                             </select>
+                            {creds[c.id] === 'password' && !c.existingTargetId && (
+                              <input className="input" type="password" style={{ height: 28, marginTop: 4 }} disabled={step !== 'select'}
+                                placeholder={sharedPassword ? 'Mot de passe commun' : `Mot de passe de ${c.username}`}
+                                value={passwords[c.id] ?? ''} onChange={(e) => setPasswords((x) => ({ ...x, [c.id]: e.target.value }))} />
+                            )}
                             {(() => {
                               const user = credentials.find((x) => x.id === creds[c.id])?.username
                               return user && c.username && user !== c.username && !c.existingTargetId
@@ -197,6 +222,15 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
                   </tbody>
                 </table>
               </div>
+              {failures.length > 0 && (
+                <div className="callout danger" style={{ marginTop: 12, display: 'block' }}>
+                  <b>Non importées après vérification :</b>
+                  <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                    {failures.map((f) => <li key={f.name}><b>{f.name}</b> — {f.message}</li>)}
+                  </ul>
+                  <div className="faint" style={{ marginTop: 6, fontSize: 12 }}>Corrigez le mot de passe ou les identifiants puis relancez « Vérifier les clés d’hôte ».</div>
+                </div>
+              )}
               {step === 'review' && needsApproval && (
                 <div className="callout warning" style={{ marginTop: 12 }}>
                   <ShieldAlert size={16} />

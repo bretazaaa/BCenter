@@ -4,6 +4,7 @@ import { StringDecoder } from 'node:string_decoder'
 import { Client, type ConnectConfig } from 'ssh2'
 import type { HostKeyInfo, JobLogLine, LogLevel, RemoteSystem, ScanResult, SshCredential, SshTarget, UpgradeOptions } from '@shared/types'
 import { commands, parseDnfSecurity, parsePackageManager, parseUpdates } from './packages'
+import { SftpSession, type FileSession } from './sftp'
 
 export interface SshSecrets {
   password?: string | null
@@ -21,6 +22,8 @@ export interface RemoteMaintenance {
   reboot(target: SshTarget, credential: SshCredential, secrets: SshSecrets, log: LogSink, signal?: AbortSignal): Promise<void>
   /** Ouvre un shell interactif (terminal) ; la clé d'hôte est vérifiée comme pour la maintenance. */
   openShell(target: SshTarget, credential: SshCredential, secrets: SshSecrets, size: TerminalSize, onData: (data: string) => void, onClose: () => void): Promise<ShellHandle>
+  /** Ouvre une session de fichiers (SFTP) ; même vérification de clé d'hôte. */
+  openSftp(target: SshTarget, credential: SshCredential, secrets: SshSecrets): Promise<FileSession>
 }
 
 export interface TerminalSize {
@@ -89,6 +92,19 @@ class Session {
           if (log && pending.trim()) log(line('output', pending))
           resolve({ code: code ?? -1, output })
         })
+      })
+    })
+  }
+
+  /** Sous-système SFTP sur la même connexion. */
+  sftp(): Promise<FileSession> {
+    return new Promise((resolve, reject) => {
+      this.client.sftp((err, sftp) => {
+        if (err) {
+          this.end()
+          return reject(new Error(`SFTP indisponible sur cette machine : ${err.message}`))
+        }
+        resolve(new SftpSession(sftp, () => this.end()))
       })
     })
   }
@@ -220,6 +236,11 @@ export class SshMaintenance implements RemoteMaintenance {
   async openShell(target: SshTarget, credential: SshCredential, secrets: SshSecrets, size: TerminalSize, onData: (data: string) => void, onClose: () => void) {
     const session = await this.connect(target, credential, secrets)
     return session.shell(size, onData, onClose)
+  }
+
+  async openSftp(target: SshTarget, credential: SshCredential, secrets: SshSecrets) {
+    const session = await this.connect(target, credential, secrets)
+    return session.sftp()
   }
 
   private async connect(target: SshTarget, credential: SshCredential, secrets: SshSecrets, log?: LogSink): Promise<Session> {

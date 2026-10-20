@@ -5,6 +5,7 @@ import type {
   InfraSnapshot,
   JobLogLine,
   MetricPoint,
+  RemoteFile,
   NasAction,
   NasDisk,
   NasProfile,
@@ -21,6 +22,9 @@ import { secretKeys } from './data/secrets'
 import { snapshotName } from './services/snapshots'
 import type { GuestRef, VirtualizationProvider } from './services/provider'
 import type { RemoteMaintenance, ShellHandle } from './ssh/client'
+import { remoteJoin, type FileSession, type TransferProgress } from './ssh/sftp'
+import { readFile as readLocal, writeFile as writeLocal } from 'node:fs/promises'
+import { basename } from 'node:path'
 
 /**
  * Mode démonstration (`--demo`) : vraie interface et vrai moteur, mais Proxmox et SSH simulés.
@@ -222,6 +226,11 @@ class DemoRemote implements RemoteMaintenance {
       log({ time: Date.now(), level: 'output', text })
     }
     return { rebootRequired: Math.random() > 0.5 }
+  }
+
+  async openSftp(target: SshTarget): Promise<FileSession> {
+    await wait(400)
+    return new DemoFiles(target.name)
   }
 
   async openShell(target: SshTarget, _c: unknown, _s: unknown, _size: unknown, onData: (data: string) => void, onClose: () => void) {
@@ -467,4 +476,80 @@ function demoPbs(): NasData {
     alerts: [],
     capabilities: ['reboot', 'shutdown'],
   }
+}
+
+// ------------------------------------------------------------------ Fichiers simulés
+
+/** Système de fichiers en mémoire du mode démonstration. */
+class DemoFiles implements FileSession {
+  private readonly files = new Map<string, { type: 'dir' | 'file'; content: string; modified: number }>()
+
+  constructor(host: string) {
+    const now = Date.now()
+    const dir = (p: string) => this.files.set(p, { type: 'dir', content: '', modified: now - 86_400_000 })
+    const file = (p: string, content: string, age = 3600_000) => this.files.set(p, { type: 'file', content, modified: now - age })
+    for (const d of ['/', '/root', '/root/scripts', '/root/logs', '/etc', '/etc/nginx', '/var', '/var/log']) dir(d)
+    file('/root/.bashrc', 'export EDITOR=vim\nalias ll="ls -alF"\n', 30 * 86_400_000)
+    file('/root/docker-compose.yml', `services:\n  app:\n    image: nginx:1.27\n    restart: unless-stopped\n    ports:\n      - "80:80"\n`)
+    file('/root/scripts/backup.sh', '#!/bin/sh\nrsync -a /srv/data/ backup@nas:/backups/' + host + '/\n', 5 * 86_400_000)
+    file('/root/logs/deploy.log', '2026-10-18 21:04 deploy ok\n2026-10-19 08:12 deploy ok\n')
+    file('/etc/hostname', `${host}\n`, 90 * 86_400_000)
+    file('/etc/nginx/nginx.conf', 'user www-data;\nworker_processes auto;\n\nevents { worker_connections 768; }\n', 12 * 86_400_000)
+    file('/var/log/syslog', 'Oct 20 09:00:01 systemd[1]: Started Daily apt download activities.\n', 600_000)
+  }
+
+  async home() {
+    return '/root'
+  }
+
+  async list(path: string): Promise<RemoteFile[]> {
+    await wait(150)
+    if (this.files.get(path)?.type !== 'dir') throw new Error('Fichier ou dossier introuvable.')
+    return [...this.files.entries()]
+      .filter(([p]) => p !== path && p.slice(0, p.lastIndexOf('/') || 1) === path)
+      .map(([p, f]) => ({ name: p.slice(p.lastIndexOf('/') + 1), path: p, type: f.type, size: f.type === 'dir' ? 4096 : Buffer.byteLength(f.content), modified: f.modified, mode: f.type === 'dir' ? 'drwxr-xr-x' : '-rw-r--r--' }))
+      .sort((a, b) => (a.type === 'dir' ? 0 : 1) - (b.type === 'dir' ? 0 : 1) || a.name.localeCompare(b.name))
+  }
+
+  async mkdir(path: string) {
+    if (this.files.has(path)) throw new Error('Ce nom existe déjà.')
+    this.files.set(path, { type: 'dir', content: '', modified: Date.now() })
+  }
+
+  async rename(from: string, to: string) {
+    for (const [p, f] of [...this.files]) {
+      if (p === from || p.startsWith(`${from}/`)) {
+        this.files.delete(p)
+        this.files.set(to + p.slice(from.length), f)
+      }
+    }
+  }
+
+  async remove(path: string) {
+    for (const p of [...this.files.keys()]) if (p === path || p.startsWith(`${path}/`)) this.files.delete(p)
+  }
+
+  async readText(path: string) {
+    const f = this.files.get(path)
+    if (!f || f.type !== 'file') throw new Error('Fichier introuvable.')
+    return f.content
+  }
+
+  async writeText(path: string, content: string) {
+    this.files.set(path, { type: 'file', content, modified: Date.now() })
+  }
+
+  async download(remote: string, local: string, progress?: TransferProgress) {
+    const content = await this.readText(remote)
+    progress?.(basename(remote), content.length, content.length)
+    await writeLocal(local, content)
+  }
+
+  async upload(local: string, remoteDir: string, progress?: TransferProgress) {
+    const data = await readLocal(local)
+    progress?.(basename(local), data.length, data.length)
+    this.files.set(remoteJoin(remoteDir, basename(local)), { type: 'file', content: data.toString('utf8'), modified: Date.now() })
+  }
+
+  close() {}
 }

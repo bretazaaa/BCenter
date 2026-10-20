@@ -2,7 +2,7 @@ import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, safeStorage, shell, Tray } from 'electron'
 import type { ApiResult, BCenterApi, BCenterEvents } from '@shared/api'
-import type { AlertSeverity, AppSettings } from '@shared/types'
+import type { AlertSeverity, AppSettings, DetachSpec } from '@shared/types'
 import { createDemoPorts, seedDemo } from './demo'
 import { Engine } from './engine'
 import { AppUpdater } from './updater'
@@ -223,7 +223,7 @@ function applyStartup(settings: AppSettings) {
 }
 
 function registerIpc() {
-  const host: Pick<BCenterApi, 'windowMinimize' | 'windowToggleMaximize' | 'windowClose' | 'appInfo' | 'openPath' | 'pickPrivateKey' | 'quit' | 'checkAppUpdate' | 'installAppUpdate' | 'saveSettings'> = {
+  const host: Pick<BCenterApi, 'windowMinimize' | 'windowToggleMaximize' | 'windowClose' | 'appInfo' | 'openPath' | 'pickPrivateKey' | 'quit' | 'checkAppUpdate' | 'installAppUpdate' | 'saveSettings' | 'fsDownload' | 'fsUpload' | 'openDetached'> = {
     windowMinimize: async () => BrowserWindow.getFocusedWindow()?.minimize(),
     windowToggleMaximize: async () => {
       const win = BrowserWindow.getFocusedWindow()
@@ -247,6 +247,26 @@ function registerIpc() {
       engine?.stop()
       updater.install()
     },
+    fsDownload: async (fsId, paths) => {
+      const parent = BrowserWindow.getFocusedWindow() ?? mainWindow!
+      const single = paths.length === 1
+      const result = single
+        ? await dialog.showSaveDialog(parent, { title: 'Télécharger', defaultPath: join(app.getPath('downloads'), paths[0].split('/').pop() || 'fichier') })
+        : await dialog.showOpenDialog(parent, { title: 'Télécharger dans le dossier…', defaultPath: app.getPath('downloads'), properties: ['openDirectory', 'createDirectory'] })
+      const local = 'filePath' in result ? result.filePath : result.filePaths[0]
+      if (result.canceled || !local) return null
+      await engine!.downloadTo(fsId, paths, local, single)
+      return local
+    },
+    fsUpload: async (fsId, remoteDir, folders) => {
+      const result = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow() ?? mainWindow!, {
+        title: folders ? 'Envoyer des dossiers' : 'Envoyer des fichiers',
+        properties: [folders ? 'openDirectory' : 'openFile', 'multiSelections'],
+      })
+      if (result.canceled) return 0
+      return engine!.api.fsUploadPaths(fsId, remoteDir, result.filePaths)
+    },
+    openDetached: async (spec) => openDetached(spec),
     saveSettings: async (settings) => {
       const saved = engine!.settings.save(settings)
       applyStartup(saved)
@@ -255,18 +275,56 @@ function registerIpc() {
     },
   }
 
-  ipcMain.handle('api', async (_event, name: keyof BCenterApi, args: unknown[]): Promise<ApiResult<unknown>> => {
+  ipcMain.handle('api', async (event, name: keyof BCenterApi, args: unknown[]): Promise<ApiResult<unknown>> => {
     try {
       const handler = (name in host ? host[name as keyof typeof host] : engine?.api[name as keyof Engine['api']]) as
         | ((...a: unknown[]) => Promise<unknown>)
         | undefined
       if (!handler) throw new Error(`Opération inconnue : ${String(name)}`)
       if (name === 'completeSetup') applyStartup((args[0] as { settings: AppSettings }).settings)
-      return { ok: true, value: await handler(...args) }
+      const value = await handler(...args)
+      // Sessions SSH et SFTP rattachées à la fenêtre qui les utilise : fermées avec elle.
+      if (name === 'openShell') own(event.sender, 'shell', value as string)
+      if (name === 'shellAttach') own(event.sender, 'shell', args[0] as string)
+      if (name === 'fsOpen') own(event.sender, 'files', (value as { id: string }).id)
+      return { ok: true, value }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
   })
+}
+
+const owners = new Map<string, { kind: 'shell' | 'files'; owner: number }>()
+const watched = new Set<number>()
+
+/** Rattache une session à une fenêtre ; à la fermeture de celle-ci, ses sessions encore ouvertes sont fermées. */
+function own(sender: Electron.WebContents, kind: 'shell' | 'files', id: string) {
+  owners.set(id, { kind, owner: sender.id })
+  if (watched.has(sender.id)) return
+  watched.add(sender.id)
+  const senderId = sender.id
+  sender.once('destroyed', () => {
+    watched.delete(senderId)
+    for (const [sessionId, o] of [...owners]) {
+      if (o.owner !== senderId) continue
+      owners.delete(sessionId)
+      void (o.kind === 'shell' ? engine?.api.shellClose(sessionId) : engine?.api.fsClose(sessionId))
+    }
+  })
+}
+
+/** Fenêtre séparée : terminal (session reprise) ou gestionnaire de fichiers. */
+function openDetached(spec: DetachSpec) {
+  const win = new BrowserWindow({
+    width: spec.kind === 'files' ? 1100 : 1000, height: 680, minWidth: 560, minHeight: 360, frame: false, show: false,
+    backgroundColor: '#08090c', title: 'BCenter', icon: iconPath,
+    webPreferences: { preload, sandbox: false, contextIsolation: true, spellcheck: false },
+  })
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  win.webContents.on('will-navigate', (event) => event.preventDefault())
+  win.once('ready-to-show', () => win.show())
+  const query = new URLSearchParams(Object.entries(spec).filter(([, v]) => v != null).map(([k, v]): [string, string] => [k, String(v)]))
+  loadRenderer(win, `/detached?${query}`)
 }
 
 app.on('window-all-closed', () => {

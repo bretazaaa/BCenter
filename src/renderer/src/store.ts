@@ -17,9 +17,15 @@ import { api, on } from './lib/api'
 
 export type Page = 'dashboard' | 'infrastructure' | 'nas' | 'connections' | 'guests' | 'updates' | 'monitoring' | 'alerts' | 'logs' | 'settings'
 
+/** Onglet du panneau du bas : terminal SSH ou gestionnaire de fichiers (SFTP). */
 export interface TerminalTab {
   key: string
+  kind: 'shell' | 'files'
   target: SshTarget
+  /** Session SSH du terminal, connue une fois ouverte (permet de la détacher sans la couper). */
+  sessionId?: string
+  /** Dossier courant du gestionnaire de fichiers. */
+  path?: string
 }
 
 export interface Toast {
@@ -74,6 +80,9 @@ interface AppStore {
   dismissToast(id: number): void
   /** Ouvre un nouvel onglet de terminal sur la machine (null masque le terminal). */
   openShell(target: SshTarget | null): void
+  /** Ouvre un gestionnaire de fichiers sur la machine. */
+  openFiles(target: SshTarget): void
+  updateTab(key: string, patch: Partial<Pick<TerminalTab, 'sessionId' | 'path'>>): void
   closeTerminal(key: string): void
   selectTerminal(key: string): void
   toggleTerminal(open?: boolean): void
@@ -181,8 +190,13 @@ export const useApp = create<AppStore>((set, get) => ({
   openShell: (target) => {
     if (!target) return set({ terminalOpen: false })
     const key = `t${++terminalId}`
-    set((s) => ({ terminals: [...s.terminals, { key, target }], activeTerminal: key, terminalOpen: true }))
+    set((s) => ({ terminals: [...s.terminals, { key, kind: 'shell', target }], activeTerminal: key, terminalOpen: true }))
   },
+  openFiles: (target) => {
+    const key = `t${++terminalId}`
+    set((s) => ({ terminals: [...s.terminals, { key, kind: 'files', target }], activeTerminal: key, terminalOpen: true }))
+  },
+  updateTab: (key, patch) => set((s) => ({ terminals: s.terminals.map((t) => (t.key === key ? { ...t, ...patch } : t)) })),
   closeTerminal: (key) =>
     set((s) => {
       const index = s.terminals.findIndex((t) => t.key === key)

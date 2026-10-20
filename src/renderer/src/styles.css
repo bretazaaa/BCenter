@@ -354,11 +354,12 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; }
 .terminal-dock .tab button { display: flex; border: 0; background: none; color: var(--text-3); padding: 3px; border-radius: 4px; }
 .terminal-dock .tab button:hover { background: var(--panel-hover); color: var(--text); }
 .terminal-dock .panes { flex: 1; min-height: 0; position: relative; }
-.terminal-dock .pane { position: absolute; inset: 0; padding: 6px 4px 4px 10px; }
-.terminal-dock .xterm-host { height: 100%; }
-.terminal-dock .xterm-host .xterm { height: 100%; }
-.terminal-dock .xterm-viewport { background: #08090c !important; }
-.terminal-dock .reconnect { position: absolute; top: 8px; right: 16px; z-index: 3; }
+.terminal-dock .pane { position: absolute; inset: 0; }
+.term-pane { position: relative; height: 100%; padding: 6px 4px 4px 10px; background: #08090c; }
+.xterm-host { height: 100%; }
+.xterm-host .xterm { height: 100%; }
+.term-pane .xterm-viewport { background: #08090c !important; }
+.term-pane .reconnect { position: absolute; top: 8px; right: 16px; z-index: 3; }
 
 /* Dossiers de la page Connexions */
 .folder {
@@ -374,3 +375,27 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; }
   display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; border: 1px solid;
   font-size: 11.5px; font-weight: 500; white-space: nowrap;
 }
+
+/* Gestionnaire de fichiers (SFTP) */
+.file-browser { position: relative; height: 100%; display: flex; flex-direction: column; background: var(--bg); outline: none; }
+.fb-toolbar { display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--border-soft); }
+.fb-toolbar .sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+.fb-path { flex: 1; min-width: 120px; }
+.fb-path .input { height: 30px; }
+.fb-crumbs { display: flex; align-items: center; gap: 2px; padding: 4px 12px; font-size: 12.5px; border-bottom: 1px solid var(--border-soft); overflow: hidden; white-space: nowrap; }
+.fb-crumbs button { border: 0; background: none; color: var(--text-2); padding: 2px 5px; border-radius: 5px; }
+.fb-crumbs button:hover { background: var(--panel-hover); color: var(--text); }
+.fb-transfer { display: flex; align-items: center; gap: 10px; padding: 6px 12px; font-size: 12px; border-bottom: 1px solid var(--border-soft); }
+.fb-list { flex: 1; min-height: 0; overflow: auto; }
+.fb-list .table th { position: sticky; top: 0; background: var(--bg); z-index: 1; }
+.fb-row { cursor: default; user-select: none; }
+.fb-row td { padding-top: 6px; padding-bottom: 6px; }
+.fb-row:hover td { background: var(--panel-hover); }
+.fb-row.on td { background: var(--accent-soft); }
+.fb-icon { vertical-align: -2px; margin-right: 9px; color: var(--text-3); }
+.fb-icon.dir { color: var(--accent); }
+.fb-drop {
+  position: absolute; inset: 8px; display: grid; place-items: center; border: 2px dashed var(--accent); border-radius: 12px;
+  background: rgba(59, 130, 246, 0.12); font-size: 15px; pointer-events: none;
+}
+.input.fb-editor { width: 100%; height: min(62vh, 640px); font-weight: 400; resize: none; padding: 12px; line-height: 1.5; font-size: 12.5px; white-space: pre; tab-size: 2; }
