@@ -4,5 +4,6 @@ import { spawn } from 'node:child_process'
 
 const env = { ...process.env }
 delete env.ELECTRON_RUN_AS_NODE
-const child = spawn(['npx electron-vite dev', ...process.argv.slice(2)].join(' '), { stdio: 'inherit', env, shell: true })
+// --watch : le processus principal est recompilé et Electron relancé à chaque modification.
+const child = spawn(['npx electron-vite dev --watch', ...process.argv.slice(2)].join(' '), { stdio: 'inherit', env, shell: true })
 child.on('exit', (code) => process.exit(code ?? 0))
