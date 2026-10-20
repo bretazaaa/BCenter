@@ -30,7 +30,8 @@ BCenter is a desktop control center for Proxmox VE and NAS systems:
 - **Infrastructure** — servers, nodes and storages with live usage.
 - **VM / LXC** — filter guests, start, shut down, reboot or stop them.
 - **NAS** — TrueNAS (SCALE / CORE), Synology DSM, Unraid, OpenMediaVault, QNAP (basic) and Proxmox Backup Server: pools and volumes, disk health and temperature, shares, services, apps and containers, data tasks and alerts. Act directly from BCenter: start / stop services and apps, run snapshot, replication, sync and backup tasks, scrub, update, reboot.
-- **SSH shell** — built-in terminal on your machines, guests and NAS.
+- **Connections** — every machine you reach over SSH in one place, with folders, tags and search. Import them from XPipe, OpenSSH (`~/.ssh/config`), PuTTY, WinSCP or MobaXterm.
+- **Terminal and file manager** — tabbed SSH terminal and SFTP file manager (upload, download, drag and drop, in-place editing), each detachable into its own window.
 - **Update center** — scan and apply package updates over SSH (apt, dnf, yum, apk, zypper, pacman), one by one or in bulk, with a live execution log.
 - **Safe updates** — a Proxmox snapshot is taken before each update, restorable in one click and pruned automatically after a configurable retention period. Your scheduled backups (NAS, Proxmox Backup Server) stay managed by Proxmox.
 - **Monitoring** — CPU, memory, network and load history for nodes, guests and NAS.
@@ -63,6 +64,8 @@ Want to look around first? Start BCenter with `--demo` to explore the interface 
 - API tokens, NAS credentials, SSH passwords and key passphrases are encrypted with Windows DPAPI, bound to your Windows account, and never logged.
 - TLS certificates must be trusted by Windows or explicitly approved by their SHA-256 fingerprint.
 - SSH host keys are verified against an approved fingerprint; a changed key blocks the connection.
+- Imports never read passwords from other tools: they stay in those tools' encrypted vaults.
+- Every window runs in Chromium's sandbox with a strict Content Security Policy; navigation, pop-ups and device permissions are blocked.
 - Everything stays on your PC (`%LOCALAPPDATA%\BCenter`). BCenter only talks to your own servers and to GitHub for updates.
 
 Found a security issue? Please report it privately through [GitHub security advisories](https://github.com/bretazaaa/BCenter/security/advisories/new) rather than a public issue.

@@ -1,4 +1,4 @@
-import { BookOpen, Download, HardDrive, Heart, KeyRound, Wrench } from 'lucide-react'
+import { BookOpen, Download, Heart, KeyRound, SquareTerminal, Wrench } from 'lucide-react'
 import type { ServerProfile } from '@shared/types'
 import { api } from '../lib/api'
 import { useApp } from '../store'
@@ -120,7 +120,7 @@ export function WelcomeModal({ onClose }: { onClose: () => void }) {
         </div>
       </div>
       <div className="grid three" style={{ gap: 8 }}>
-        <button className="btn outline-accent" onClick={() => go('nas')}><HardDrive size={14} /> NAS</button>
+        <button className="btn outline-accent" onClick={() => go('connections')}><SquareTerminal size={14} /> Connexions</button>
         <button className="btn" onClick={() => go('updates')}><Wrench size={14} /> Mises à jour</button>
         <button className="btn" onClick={() => go('settings')}><KeyRound size={14} /> Réglages</button>
       </div>
@@ -132,16 +132,17 @@ export function WelcomeModal({ onClose }: { onClose: () => void }) {
       <div className="card" style={{ background: 'var(--panel-2)', padding: '14px 16px' }}>
         <div style={{ fontWeight: 600, marginBottom: 6 }}><BookOpen size={13} style={{ verticalAlign: -2, marginRight: 6 }} />Nouveautés</div>
         <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
-          <li>Vos <b>NAS</b> sur le tableau de bord : stockage, disques, applications et état en un coup d’œil.</li>
-          <li><b>Monitoring des NAS</b> : processeur, mémoire, stockage et températures.</li>
-          <li>Bouton <b>Ajouter</b> : serveur Proxmox, NAS ou machine SSH.</li>
-          <li>Mises à jour de BCenter proposées dès le démarrage, installées sans assistant puis relance automatique.</li>
+          <li>Nouvelle page <b>Connexions</b> : toutes vos machines au même endroit, avec dossiers, tags et recherche.</li>
+          <li><b>Import</b> depuis XPipe, OpenSSH, PuTTY, WinSCP et MobaXterm, mot de passe saisi une seule fois, connexions testées avant l’ajout.</li>
+          <li><b>Terminal à onglets</b> et <b>gestionnaire de fichiers</b> (envoi, téléchargement, glisser-déposer, édition).</li>
+          <li>Terminaux et fichiers <b>détachables</b> dans leur propre fenêtre, puis rattachables, sans couper la session.</li>
         </ul>
       </div>
       <div className="card" style={{ background: 'var(--panel-2)', padding: '14px 16px', marginTop: 10 }}>
-        <div style={{ fontWeight: 600, marginBottom: 6 }}>Rappel 0.2.0</div>
+        <div style={{ fontWeight: 600, marginBottom: 6 }}>Sécurité</div>
         <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
-          <li>Page <b>NAS</b> : TrueNAS, Synology, Unraid, OpenMediaVault, QNAP et Proxmox Backup Server, avec actions directes.</li>
+          <li>Fenêtres isolées (sandbox), navigation et autorisations bloquées, politique de contenu renforcée.</li>
+          <li>Téléchargements protégés contre les noms de fichiers piégés ; mots de passe jamais lus dans les autres logiciels.</li>
         </ul>
       </div>
     </Modal>

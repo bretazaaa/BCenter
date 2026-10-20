@@ -254,7 +254,9 @@ const exec = promisify(execFile)
 
 async function regQuery(root: string) {
   try {
-    const { stdout } = await exec('reg', ['query', root, '/s'], { windowsHide: true, maxBuffer: 8 * 1024 * 1024 })
+    // Chemin absolu : un « reg.exe » placé dans le dossier courant ne doit jamais être exécuté.
+    const reg = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'reg.exe')
+    const { stdout } = await exec(reg, ['query', root, '/s'], { windowsHide: true, maxBuffer: 8 * 1024 * 1024 })
     return parseRegQuery(stdout, root)
   } catch {
     return null // Clé absente : logiciel non installé.

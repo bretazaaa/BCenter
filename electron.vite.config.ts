@@ -11,11 +11,16 @@ export default defineConfig({
     resolve: { alias: { '@shared': resolve('src/shared') } },
   },
   preload: {
-    build: { externalizeDeps: true },
+    // CommonJS : un preload exécuté dans un renderer isolé (sandbox) ne peut pas être un module ES.
+    build: { externalizeDeps: true, rollupOptions: { output: { format: 'cjs', entryFileNames: '[name].cjs' } } },
     resolve: { alias: { '@shared': resolve('src/shared') } },
   },
   renderer: {
     resolve: { alias: { '@shared': resolve('src/shared'), '@': resolve('src/renderer/src') } },
-    plugins: [react()],
+    plugins: [
+      react(),
+      // En production, aucune connexion WebSocket n'est nécessaire (rechargement à chaud uniquement en développement).
+      { name: 'bcenter-csp', apply: 'build', transformIndexHtml: (html: string) => html.replace("connect-src 'self' ws:", "connect-src 'self'") },
+    ],
   },
 })

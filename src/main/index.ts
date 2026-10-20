@@ -1,10 +1,11 @@
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, safeStorage, shell, Tray } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, safeStorage, session, shell, Tray } from 'electron'
 import type { ApiResult, BCenterApi, BCenterEvents } from '@shared/api'
 import type { AlertSeverity, AppSettings, DetachSpec } from '@shared/types'
 import { createDemoPorts, seedDemo } from './demo'
 import { Engine } from './engine'
+import { safeLocalName } from './ssh/sftp'
 import { AppUpdater } from './updater'
 
 const isDemo = process.argv.includes('--demo') || process.env.BCENTER_DEMO === '1'
@@ -34,15 +35,31 @@ let quitting = false
 let trayHintShown = false
 const updater = new AppUpdater((state) => broadcast('appUpdate', state))
 
-const preload = join(import.meta.dirname, '../preload/index.mjs')
+const preload = join(import.meta.dirname, '../preload/index.cjs')
 const iconPath = app.isPackaged ? join(process.resourcesPath, 'tray.ico') : join(import.meta.dirname, '../../src/main/tray.ico')
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   app.on('second-instance', () => showMain())
-  app.whenReady().then(boot).catch((error) => fatal(error))
+  app.whenReady().then(() => {
+    // Aucune fonction matérielle (caméra, micro, notifications web, géolocalisation…) n'est accordée aux pages.
+    session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
+    session.defaultSession.setPermissionCheckHandler(() => false)
+    return boot()
+  }).catch((error) => fatal(error))
 }
+
+// Toutes les pages : pas de navigation, pas de webview ; les liens web s'ouvrent dans le navigateur.
+app.on('web-contents-created', (_event, contents) => {
+  contents.on('will-navigate', (event) => event.preventDefault())
+  contents.on('will-attach-webview', (event) => event.preventDefault())
+  contents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+})
+
 
 function broadcast<K extends keyof BCenterEvents>(event: K, payload: BCenterEvents[K]) {
   for (const win of BrowserWindow.getAllWindows()) if (!win.isDestroyed()) win.webContents.send(`event:${event}`, payload)
@@ -63,7 +80,7 @@ async function boot() {
   splash = new BrowserWindow({
     width: 560, height: 400, frame: false, transparent: true, resizable: false, show: false, center: true,
     skipTaskbar: false, icon: iconPath, title: 'BCenter',
-    webPreferences: { preload, sandbox: false, contextIsolation: true },
+    webPreferences: { preload, sandbox: true, contextIsolation: true },
   })
   splash.once('ready-to-show', () => splash?.show())
   loadRenderer(splash, '/splash')
@@ -142,7 +159,7 @@ function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1440, height: 900, minWidth: 1100, minHeight: 680, show: false, frame: false,
     backgroundColor: '#0b0c10', title: 'BCenter', icon: iconPath,
-    webPreferences: { preload, sandbox: false, contextIsolation: true, spellcheck: false },
+    webPreferences: { preload, sandbox: true, contextIsolation: true, spellcheck: false },
   })
   mainWindow.on('maximize', () => broadcast('maximized', true))
   mainWindow.on('unmaximize', () => broadcast('maximized', false))
@@ -159,12 +176,6 @@ function createMainWindow() {
       void requestQuit()
     }
   })
-  // Liens externes dans le navigateur, jamais dans l'application.
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//.test(url)) void shell.openExternal(url)
-    return { action: 'deny' }
-  })
-  mainWindow.webContents.on('will-navigate', (event) => event.preventDefault())
   loadRenderer(mainWindow, '/')
 }
 
@@ -251,7 +262,7 @@ function registerIpc() {
       const parent = BrowserWindow.getFocusedWindow() ?? mainWindow!
       const single = paths.length === 1
       const result = single
-        ? await dialog.showSaveDialog(parent, { title: 'Télécharger', defaultPath: join(app.getPath('downloads'), paths[0].split('/').pop() || 'fichier') })
+        ? await dialog.showSaveDialog(parent, { title: 'Télécharger', defaultPath: join(app.getPath('downloads'), safeLocalName(paths[0].split('/').pop() || 'fichier')) })
         : await dialog.showOpenDialog(parent, { title: 'Télécharger dans le dossier…', defaultPath: app.getPath('downloads'), properties: ['openDirectory', 'createDirectory'] })
       const local = 'filePath' in result ? result.filePath : result.filePaths[0]
       if (result.canceled || !local) return null
@@ -327,10 +338,8 @@ function openDetached(spec: DetachSpec) {
   const win = new BrowserWindow({
     width: spec.kind === 'files' ? 1100 : 1000, height: 680, minWidth: 560, minHeight: 360, frame: false, show: false,
     backgroundColor: '#08090c', title: 'BCenter', icon: iconPath,
-    webPreferences: { preload, sandbox: false, contextIsolation: true, spellcheck: false },
+    webPreferences: { preload, sandbox: true, contextIsolation: true, spellcheck: false },
   })
-  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-  win.webContents.on('will-navigate', (event) => event.preventDefault())
   win.once('ready-to-show', () => win.show())
   const query = new URLSearchParams(Object.entries(spec).filter(([, v]) => v != null).map(([k, v]): [string, string] => [k, String(v)]))
   loadRenderer(win, `/detached?${query}`)

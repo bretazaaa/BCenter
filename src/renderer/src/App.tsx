@@ -1,15 +1,16 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { DialogHost } from './components/dialogs'
-import { TerminalDock } from './components/Terminal'
+// Graphiques (recharts) et terminal (xterm) chargés à la demande : démarrage plus rapide.
+const TerminalDock = lazy(() => import('./components/Terminal').then((m) => ({ default: m.TerminalDock })))
 import { ServerModal, UpdateModal, WelcomeModal } from './components/modals'
 import { Console, StatusBar, StatusRow, TitleBar, Toasts, Toolbar, type AddKind } from './components/shell'
 import { Logo } from './components/ui'
 import { AlertsPage } from './pages/Alerts'
-import { Dashboard } from './pages/Dashboard'
+const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })))
 import { GuestsPage } from './pages/Guests'
 import { InfrastructurePage } from './pages/Infrastructure'
 import { LogsPage } from './pages/Logs'
-import { MonitoringPage } from './pages/Monitoring'
+const MonitoringPage = lazy(() => import('./pages/Monitoring').then((m) => ({ default: m.MonitoringPage })))
 import { ConnectionsPage } from './pages/Connections'
 import { NasModal, NasPage } from './pages/Nas'
 import { SettingsPage } from './pages/Settings'
@@ -18,7 +19,7 @@ import { on } from './lib/api'
 import { useApp, type Page } from './store'
 import { Wizard } from './wizard/Wizard'
 
-const PAGES: Record<Page, () => React.JSX.Element> = {
+const PAGES: Record<Page, React.ComponentType> = {
   dashboard: Dashboard,
   infrastructure: InfrastructurePage,
   nas: NasPage,
@@ -97,9 +98,9 @@ export function App() {
       <TitleBar onAdd={setAdding} />
       <Toolbar onAdd={setAdding} />
       <main className="content">
-        <Current key={page} />
+        <Suspense fallback={null}><Current key={page} /></Suspense>
       </main>
-      <TerminalDock />
+      <Suspense fallback={null}><TerminalDock /></Suspense>
       {consoleOpen && <Console />}
       <StatusRow />
       <StatusBar />

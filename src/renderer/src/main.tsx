@@ -1,10 +1,12 @@
-import { StrictMode } from 'react'
+import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { DetachSpec } from '@shared/types'
-import { App } from './App'
-import { DetachedWindow } from './DetachedWindow'
 import { Splash } from './splash/Splash'
 import './styles.css'
+
+// L'écran de démarrage ne charge que lui-même ; l'application et les fenêtres détachées sont chargées à la demande.
+const App = lazy(() => import('./App').then((m) => ({ default: m.App })))
+const DetachedWindow = lazy(() => import('./DetachedWindow').then((m) => ({ default: m.DetachedWindow })))
 
 const route = window.location.hash.replace(/^#/, '')
 const [path, query] = route.split('?')
@@ -25,5 +27,5 @@ function Root() {
 }
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode><Root /></StrictMode>,
+  <StrictMode><Suspense fallback={null}><Root /></Suspense></StrictMode>,
 )

@@ -20,7 +20,7 @@ import { SnapshotManager } from './services/snapshots'
 import type { VirtualizationProvider } from './services/provider'
 import { SshMaintenance, type RemoteMaintenance, type ShellHandle, type SshSecrets } from './ssh/client'
 import { discover, knownHostFingerprints } from './ssh/importers'
-import type { FileSession } from './ssh/sftp'
+import { localChild, type FileSession } from './ssh/sftp'
 
 export interface EnginePorts {
   dataDir: string
@@ -533,7 +533,7 @@ export class Engine {
   /** Téléchargement vers un emplacement local (choisi par l'hôte via une boîte de dialogue). */
   async downloadTo(fsId: string, remotePaths: string[], local: string, single: boolean): Promise<void> {
     const session = this.fileSession(fsId)
-    for (const remote of remotePaths) await session.download(remote, single ? local : join(local, remote.split('/').pop() || 'fichier'), this.progress(fsId))
+    for (const remote of remotePaths) await session.download(remote, single ? local : localChild(local, remote.split('/').pop() || 'fichier'), this.progress(fsId))
   }
 
   private fileSession(id: string): FileSession {

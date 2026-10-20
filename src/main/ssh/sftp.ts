@@ -1,5 +1,5 @@
 import { mkdir, readdir, stat } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { basename, join, resolve, sep } from 'node:path'
 import type { SFTPWrapper, Stats } from 'ssh2'
 import type { RemoteFile } from '@shared/types'
 
@@ -27,6 +27,27 @@ const S_IFDIR = 0o040000
 const S_IFLNK = 0o120000
 
 export const remoteJoin = (dir: string, name: string) => (dir.endsWith('/') ? `${dir}${name}` : `${dir}/${name}`)
+
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com\d|lpt\d)(\..*)?$/i
+
+/**
+ * Nom de fichier local sûr pour un nom venant du serveur. Sous Linux, un nom peut contenir « \ » ou « : » :
+ * sans ce filtre, un serveur malveillant pourrait écrire en dehors du dossier choisi (« ..\..\Startup\x.bat »).
+ */
+export function safeLocalName(name: string): string {
+  let safe = name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').replace(/[. ]+$/, '')
+  if (!safe || safe === '.' || safe === '..') safe = '_'
+  if (WINDOWS_RESERVED.test(safe)) safe = `_${safe}`
+  return safe
+}
+
+/** Chemin local d'un élément distant dans `dir`, garanti à l'intérieur de `dir`. */
+export function localChild(dir: string, name: string): string {
+  const root = resolve(dir)
+  const path = resolve(root, safeLocalName(name))
+  if (path !== root && !path.startsWith(root + sep)) throw new Error(`Nom de fichier refusé : ${name}`)
+  return path
+}
 
 const call = <T>(fn: (cb: (err: Error | null | undefined, value: T) => void) => void) =>
   new Promise<T>((resolve, reject) => fn((err, value) => (err ? reject(translate(err)) : resolve(value))))
@@ -111,7 +132,7 @@ export class SftpSession implements FileSession {
     const info = await call<Stats>((cb) => this.sftp.stat(remote, cb))
     if ((info.mode & S_IFMT) === S_IFDIR) {
       await mkdir(local, { recursive: true })
-      for (const child of await this.list(remote)) await this.download(child.path, join(local, child.name), progress)
+      for (const child of await this.list(remote)) await this.download(child.path, localChild(local, child.name), progress)
       return
     }
     await call<void>((cb) => this.sftp.fastGet(remote, local, { step: (done, _chunk, total) => progress?.(basename(remote), done, total) }, (err) => cb(err, undefined)))
