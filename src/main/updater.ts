@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { app } from 'electron'
 import electronUpdater from 'electron-updater'
 import type { AppUpdateState } from '@shared/types'
@@ -31,7 +33,7 @@ export class AppUpdater {
   }
 
   async check(): Promise<AppUpdateState> {
-    if (!app.isPackaged) return this.set({ state: 'error', message: 'Vérification disponible uniquement dans la version installée.' })
+    if (!installed()) return this.set({ state: 'error', message: 'Cette copie de BCenter n’a pas été installée avec l’installateur (version de test) : utilisez la version installée pour les mises à jour.' })
     if (['checking', 'available', 'downloading', 'ready'].includes(this.state.state)) return this.state
     try {
       await autoUpdater.checkForUpdates()
@@ -47,7 +49,7 @@ export class AppUpdater {
    * alors en arrière-plan et sera proposé plus tard).
    */
   async prepareAtStartup(onProgress: (version: string, percent: number) => void, timeoutMs = 120_000): Promise<string | null> {
-    if (!app.isPackaged) return null
+    if (!installed()) return null
     try {
       const result = await Promise.race([autoUpdater.checkForUpdates(), new Promise<null>((r) => setTimeout(() => r(null), 8000))])
       const version = result?.isUpdateAvailable ? result.updateInfo.version : null
@@ -86,4 +88,9 @@ export class AppUpdater {
     this.onState(state)
     return state
   }
+}
+
+/** Copie installée par l'installateur (qui fournit app-update.yml), et non version de développement ou de test. */
+function installed(): boolean {
+  return app.isPackaged && existsSync(join(process.resourcesPath, 'app-update.yml'))
 }
