@@ -1,7 +1,7 @@
 {
   "name": "bcenter",
   "productName": "BCenter",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Windows desktop app to monitor and maintain Proxmox VE infrastructure",
   "license": "GPL-3.0-only",
   "author": "Bretaza",
