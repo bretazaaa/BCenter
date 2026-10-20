@@ -367,3 +367,10 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; }
 }
 .folder:hover { background: var(--panel-hover); color: var(--text); }
 .folder.on { background: var(--accent-soft); color: var(--text); }
+.folder-label { display: inline-flex; align-items: center; gap: 6px; }
+.folder-label svg { color: var(--text-3); }
+.tag-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag-pill {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; border: 1px solid;
+  font-size: 11.5px; font-weight: 500; white-space: nowrap;
+}

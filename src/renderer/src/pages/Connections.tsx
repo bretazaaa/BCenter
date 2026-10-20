@@ -1,4 +1,4 @@
-import { Box, Folder, FolderOpen, HardDrive, Monitor, Pencil, Plus, Search, Server, Sparkles, TerminalSquare, Trash2, Wrench } from 'lucide-react'
+import { Box, Download, Folder, FolderOpen, HardDrive, Monitor, Pencil, Plus, Search, Server, Sparkles, TerminalSquare, Trash2, Wrench } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { GuestInfo, NasProfile, SshTarget } from '@shared/types'
 import { confirm, useAction } from '../components/dialogs'
@@ -6,6 +6,7 @@ import { Badge, Card, Empty, Field, Modal } from '../components/ui'
 import { api } from '../lib/api'
 import { relative } from '../lib/format'
 import { attempt, useApp } from '../store'
+import { ImportModal } from './ImportModal'
 import { AddTargetModal } from './Updates'
 
 type Filter = { kind: 'all' } | { kind: 'group'; group: string | null } | { kind: 'suggestions' }
@@ -31,6 +32,7 @@ export function ConnectionsPage() {
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<SshTarget | null>(null)
   const [adding, setAdding] = useState<AddRequest | null>(null)
+  const [importing, setImporting] = useState(false)
 
   const users = new Map(credentials.map((c) => [c.id, c.username]))
   const groups = useMemo(() => [...new Set(targets.map((t) => t.group).filter((g): g is string => !!g))].sort((a, b) => a.localeCompare(b)), [targets])
@@ -73,6 +75,7 @@ export function ConnectionsPage() {
             <Search size={14} />
             <input placeholder="Nom, adresse, dossier ou tag…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </label>
+          <button className="btn" onClick={() => setImporting(true)}><Download size={14} /> Importer</button>
           <button className="btn primary" onClick={() => setAdding({ group: filter.kind === 'group' ? filter.group : null })}><Plus size={14} /> Nouvelle connexion</button>
         </div>
       </div>
@@ -126,6 +129,7 @@ export function ConnectionsPage() {
               <Empty icon={<TerminalSquare size={24} />} title="Aucune connexion" message="Ajoutez vos machines (VM, LXC, NAS, serveurs) pour y ouvrir un shell en un clic et suivre leurs mises à jour.">
                 <div className="row" style={{ justifyContent: 'center' }}>
                   <button className="btn primary" onClick={() => setAdding({})}><Plus size={14} /> Nouvelle connexion</button>
+                  <button className="btn" onClick={() => setImporting(true)}><Download size={14} /> Importer (XPipe, PuTTY…)</button>
                   {suggestionCount > 0 && <button className="btn" onClick={() => setFilter({ kind: 'suggestions' })}><Sparkles size={14} /> {suggestionCount} à configurer</button>}
                 </div>
               </Empty>
@@ -133,9 +137,9 @@ export function ConnectionsPage() {
           ) : (
             <Card className="flush">
               <table className="table">
-                <thead><tr><th>Nom</th><th>Type</th><th>Adresse</th><th>Utilisateur</th><th>Système</th><th>Dossier / tags</th><th /></tr></thead>
+                <thead><tr><th>Nom</th><th>Type</th><th>Adresse</th><th>Utilisateur</th><th>Système</th><th>Dossier</th><th>Tags</th><th /></tr></thead>
                 <tbody>
-                  {shown.length === 0 && <tr><td colSpan={7} className="faint">Aucune connexion ne correspond.</td></tr>}
+                  {shown.length === 0 && <tr><td colSpan={8} className="faint">Aucune connexion ne correspond.</td></tr>}
                   {shown.map((t) => {
                     const type = typeOf(t, nas.systems)
                     const scan = scans[t.id]
@@ -148,10 +152,10 @@ export function ConnectionsPage() {
                         <td className="muted" title={scan ? `Dernière analyse ${relative(scan.scannedAt)}` : undefined}>
                           {scan?.system ? `${scan.system.osName ?? ''} ${scan.system.osVersion ?? ''}`.trim() || scan.system.hostname : '—'}
                         </td>
+                        <td className="muted">{t.group ? <span className="folder-label"><Folder size={13} />{t.group}</span> : <span className="faint">—</span>}</td>
                         <td>
-                          <div className="row" style={{ gap: 4, flexWrap: 'wrap' }}>
-                            {t.group && <Badge kind="info" plain>{t.group}</Badge>}
-                            {t.tags.map((tag) => <span key={tag} className="tag">{tag}</span>)}
+                          <div className="tag-list">
+                            {t.tags.map((tag) => <TagPill key={tag} tag={tag} />)}
                           </div>
                         </td>
                         <td>
@@ -173,6 +177,7 @@ export function ConnectionsPage() {
         </div>
       </div>
 
+      {importing && <ImportModal onClose={() => setImporting(false)} />}
       {editing && <EditConnectionModal target={editing} groups={groups} onClose={() => setEditing(null)} />}
       {adding && (
         <AddTargetModal
@@ -238,5 +243,17 @@ function EditConnectionModal({ target, groups, onClose }: { target: SshTarget; g
         Pour changer d’adresse, supprimez puis recréez la connexion (la clé d’hôte doit être vérifiée à nouveau).
       </div>
     </Modal>
+  )
+}
+
+const TAG_COLORS = ['#3b82f6', '#22d3ee', '#a78bfa', '#22c55e', '#f59e0b', '#f472b6', '#38bdf8', '#fb7185']
+
+/** Tag avec une couleur stable dérivée de son nom. */
+export function TagPill({ tag }: { tag: string }) {
+  let hash = 0
+  for (const ch of tag.toLowerCase()) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0
+  const color = TAG_COLORS[hash % TAG_COLORS.length]
+  return (
+    <span className="tag-pill" style={{ color, background: `${color}1f`, borderColor: `${color}40` }}>{tag}</span>
   )
 }

@@ -466,3 +466,58 @@ export interface NasSample {
   temperature?: number
   diskTemperature?: number
 }
+
+// ---------------------------------------------------------------- Import de connexions
+
+export type ImportSource = 'xpipe' | 'ssh-config' | 'putty' | 'winscp' | 'mobaxterm'
+
+export const IMPORT_SOURCES: Record<ImportSource, string> = {
+  xpipe: 'XPipe',
+  'ssh-config': 'OpenSSH (~/.ssh/config)',
+  putty: 'PuTTY',
+  winscp: 'WinSCP',
+  mobaxterm: 'MobaXterm',
+}
+
+/** Connexion SSH trouvée dans un autre gestionnaire. Les mots de passe ne sont jamais importés. */
+export interface ImportCandidate {
+  id: string
+  source: ImportSource
+  name: string
+  host: string
+  port: number
+  username: string | null
+  keyPath: string | null
+  group: string | null
+  /** Connexion BCenter existante pour la même adresse et le même port. */
+  existingTargetId: string | null
+}
+
+export interface ImportSourceStatus {
+  source: ImportSource
+  found: boolean
+  count: number
+  location?: string
+  error?: string
+}
+
+export interface ImportProbe {
+  id: string
+  hostKey?: HostKeyInfo
+  /** Comparaison avec ~/.ssh/known_hosts : clé déjà approuvée, différente, ou hôte inconnu. */
+  knownHosts: 'match' | 'mismatch' | 'unknown'
+  error?: string
+}
+
+export interface ImportItem {
+  candidate: ImportCandidate
+  hostKey: HostKeyInfo
+  /** Identifiants existants, ou « auto-key » pour créer des identifiants à partir de la clé détectée. */
+  credentialId: string
+}
+
+export interface ImportResult {
+  added: number
+  linkedToProxmox: number
+  errors: { name: string; message: string }[]
+}

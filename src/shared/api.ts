@@ -6,6 +6,11 @@ import type {
   CertificateInfo,
   GuestInfo,
   HostKeyInfo,
+  ImportCandidate,
+  ImportItem,
+  ImportProbe,
+  ImportResult,
+  ImportSourceStatus,
   InfraState,
   JobHistoryEntry,
   JobInfo,
@@ -132,6 +137,12 @@ export interface BCenterApi {
   setCredentialSudo(credentialId: string, useSudo: boolean): Promise<void>
   /** Modifie le nom, le dossier, les tags ou les identifiants d'une machine. */
   updateTarget(targetId: string, patch: TargetPatch): Promise<SshTarget>
+
+  // Import depuis d'autres gestionnaires (XPipe, OpenSSH, PuTTY, WinSCP, MobaXterm)
+  discoverImports(): Promise<{ sources: ImportSourceStatus[]; candidates: ImportCandidate[] }>
+  /** Lit la clé d'hôte de chaque machine et la compare à ~/.ssh/known_hosts. */
+  probeImports(candidates: ImportCandidate[]): Promise<ImportProbe[]>
+  importConnections(items: ImportItem[]): Promise<ImportResult>
 
   // Maintenance
   listJobs(): Promise<JobInfo[]>

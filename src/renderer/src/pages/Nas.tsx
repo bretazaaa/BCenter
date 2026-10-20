@@ -1,6 +1,6 @@
 import {
   Bell, Boxes, Cpu, Database, Download, ExternalLink, HardDrive, Link2, ListChecks, MemoryStick, Pencil, Play, Plus, Power,
-  RefreshCw, RotateCw, Share2, ShieldCheck, Square, TerminalSquare, Thermometer, Trash2,
+  RefreshCw, RotateCw, Share2, ShieldCheck, Square, Thermometer, Trash2,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { NasDraft } from '@shared/api'
@@ -46,7 +46,7 @@ const StatusOf = ({ map, value }: { map: Record<string, [BadgeKind, string]>; va
 const webUrl = (n: NasProfile) => `${n.protocol}://${n.host.includes(':') ? `[${n.host}]` : n.host}:${n.port}/`
 
 export function NasPage() {
-  const { nas, targets, openShell } = useApp()
+  const { nas } = useApp()
   const [selectedId, setSelectedId] = useState<string | null>(() => localStorage.getItem('bcenter.nas') ?? null)
   const [editing, setEditing] = useState<NasProfile | 'new' | null>(null)
   const [linking, setLinking] = useState<NasProfile | null>(null)
@@ -65,12 +65,6 @@ export function NasPage() {
     } finally {
       setRefreshing(false)
     }
-  }
-
-  const shell = (n: NasProfile) => {
-    const target = targets.find((t) => t.id === n.sshTargetId)
-    if (target) openShell(target)
-    else setLinking(n)
   }
 
   const remove = async (n: NasProfile) => {
@@ -114,7 +108,6 @@ export function NasPage() {
         snap={snap}
         onEdit={() => setEditing(selected)}
         onRemove={() => void remove(selected)}
-        onShell={() => shell(selected)}
         onLink={() => setLinking(selected)}
       />
 
@@ -144,8 +137,8 @@ function NasTile({ nas, snap, active, onClick }: { nas: NasProfile; snap?: NasSn
   )
 }
 
-function NasDetail({ nas, snap, onEdit, onRemove, onShell, onLink }: {
-  nas: NasProfile; snap?: NasSnapshot; onEdit: () => void; onRemove: () => void; onShell: () => void; onLink: () => void
+function NasDetail({ nas, snap, onEdit, onRemove, onLink }: {
+  nas: NasProfile; snap?: NasSnapshot; onEdit: () => void; onRemove: () => void; onLink: () => void
 }) {
   const targets = useApp((s) => s.targets)
   const [tab, setTab] = useState<Tab>(() => (localStorage.getItem('bcenter.nasTab') as Tab | null) ?? 'storage')
@@ -202,7 +195,6 @@ function NasDetail({ nas, snap, onEdit, onRemove, onShell, onLink }: {
         </div>
         {kind.support === 'basic' && <Badge kind="info" plain>Prise en charge de base</Badge>}
         {snap ? <Badge kind={snap.reachable ? 'success' : 'danger'}>{snap.reachable ? 'Connecté' : 'Injoignable'}</Badge> : <Badge>Connexion…</Badge>}
-        <button className="btn sm" title={target ? `Shell SSH sur ${target.name}` : 'Associer une machine SSH pour ouvrir un shell'} onClick={onShell}><TerminalSquare size={13} /> Shell</button>
         <button className="btn sm" title="Ouvrir l’interface web du NAS dans le navigateur" onClick={() => window.open(webUrl(nas))}><ExternalLink size={13} /> Interface web</button>
         {can('reboot') && <button className="btn sm" disabled={!snap?.reachable || busy != null} onClick={() => power('reboot')}><RotateCw size={13} /> Redémarrer</button>}
         {can('shutdown') && <button className="btn sm icon" title="Éteindre" disabled={!snap?.reachable || busy != null} onClick={() => power('shutdown')}><Power size={13} /></button>}
@@ -263,7 +255,7 @@ function NasDetail({ nas, snap, onEdit, onRemove, onShell, onLink }: {
       {!target && (
         <div className="faint" style={{ fontSize: 12, marginTop: 14 }}>
           <Link2 size={12} style={{ verticalAlign: -2, marginRight: 6 }} />
-          Associez une machine SSH pour ouvrir un shell sur ce NAS et suivre ses paquets dans le centre de mises à jour.{' '}
+          Associez une connexion SSH pour ouvrir un shell sur ce NAS depuis Connexions et suivre ses paquets dans le centre de mises à jour.{' '}
           <button className="btn ghost sm" style={{ height: 22 }} onClick={onLink}>Associer</button>
         </div>
       )}
@@ -684,21 +676,20 @@ export function NasModal({ nas, onClose }: { nas?: NasProfile; onClose: () => vo
   )
 }
 
-/** Associe une machine SSH au NAS (shell, mises à jour des paquets). */
+/** Associe une connexion SSH au NAS (shell depuis Connexions, mises à jour des paquets). */
 function LinkNasModal({ nas, onClose }: { nas: NasProfile; onClose: () => void }) {
-  const { targets, openShell } = useApp()
+  const { targets } = useApp()
   const guess = targets.find((t) => t.host === nas.host) ?? targets.find((t) => t.name.toLowerCase() === nas.name.toLowerCase())
   const [targetId, setTargetId] = useState(nas.sshTargetId ?? guess?.id ?? '')
   const [adding, setAdding] = useState(false)
   const { busy, error, run } = useAction()
 
-  const link = (id: string | null, open: boolean) => run(async () => {
+  const link = (id: string | null) => run(async () => {
     await api.linkNasTarget(nas.id, id)
     useApp.setState({ nas: await api.getNas() })
     const target = useApp.getState().targets.find((t) => t.id === id)
-    useApp.getState().toast('success', target ? `${nas.name} est associé à la machine SSH ${target.name}.` : `${nas.name} n’est plus associé à une machine SSH.`)
+    useApp.getState().toast('success', target ? `${nas.name} est associé à la connexion ${target.name}.` : `${nas.name} n’est plus associé à une connexion SSH.`)
     onClose()
-    if (open && target) openShell(target)
   })
 
   if (adding) {
@@ -716,26 +707,26 @@ function LinkNasModal({ nas, onClose }: { nas: NasProfile; onClose: () => void }
 
   return (
     <Modal
-      title="Shell SSH du NAS"
+      title="Connexion SSH du NAS"
       width={540}
       onClose={onClose}
       footer={
         <>
           <span className="error">{error}</span>
-          {nas.sshTargetId && <button className="btn ghost" disabled={busy} onClick={() => void link(null, false)}>Dissocier</button>}
+          {nas.sshTargetId && <button className="btn ghost" disabled={busy} onClick={() => void link(null)}>Dissocier</button>}
           <button className="btn" onClick={onClose}>Annuler</button>
-          <button className="btn primary" disabled={!targetId || busy} onClick={() => void link(targetId, true)}><TerminalSquare size={14} /> Associer et ouvrir</button>
+          <button className="btn primary" disabled={!targetId || busy} onClick={() => void link(targetId)}><Link2 size={14} /> Associer</button>
         </>
       }
     >
-      <p style={{ marginTop: 0 }}>Choisissez la machine SSH correspondant à <b>{nas.name}</b> ({nas.host}). Activez d’abord le service SSH sur le NAS si nécessaire.</p>
-      <Field label="Machine SSH">
+      <p style={{ marginTop: 0 }}>Choisissez la connexion SSH correspondant à <b>{nas.name}</b> ({nas.host}). Activez d’abord le service SSH sur le NAS si nécessaire.</p>
+      <Field label="Connexion SSH">
         <select className="select" value={targetId} onChange={(e) => setTargetId(e.target.value)}>
           <option value="">— Choisir —</option>
           {targets.map((t) => <option key={t.id} value={t.id}>{t.name} ({t.host})</option>)}
         </select>
       </Field>
-      <button className="btn outline-accent" onClick={() => setAdding(true)}><Plus size={14} /> Ajouter le NAS comme machine SSH</button>
+      <button className="btn outline-accent" onClick={() => setAdding(true)}><Plus size={14} /> Créer une connexion SSH pour ce NAS</button>
     </Modal>
   )
 }

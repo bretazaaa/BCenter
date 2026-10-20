@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { mkdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { mkdirSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { basename, join } from 'node:path'
 import type { BCenterApi, BCenterEvents, CredentialDraft, NasDraft, ServerDraft, TargetDraft } from '@shared/api'
-import { NAS_KINDS, type AlertSeverity, type NasProfile, type SshCredential, type SshTarget } from '@shared/types'
+import { NAS_KINDS, type AlertSeverity, type ImportCandidate, type ImportProbe, type ImportResult, type NasProfile, type SshCredential, type SshTarget } from '@shared/types'
 import { Logger } from './core/logger'
 import { openDatabase, type Database } from './data/database'
 import { JobHistoryRepository, NasRepository, ServerRepository, SettingsRepository, SshRepository } from './data/repositories'
@@ -18,6 +19,7 @@ import { InfrastructureMonitor } from './services/monitor'
 import { SnapshotManager } from './services/snapshots'
 import type { VirtualizationProvider } from './services/provider'
 import { SshMaintenance, type RemoteMaintenance, type ShellHandle, type SshSecrets } from './ssh/client'
+import { discover, knownHostFingerprints } from './ssh/importers'
 
 export interface EnginePorts {
   dataDir: string
@@ -269,6 +271,76 @@ export class Engine {
       }
       this.ssh.upsertTarget(target)
       return target
+    },
+    discoverImports: async () => {
+      const { sources, found } = await discover()
+      const existing = this.ssh.targets()
+      const seen = new Set<string>()
+      const candidates: ImportCandidate[] = []
+      for (const f of found) {
+        // Une même machine déclarée dans plusieurs gestionnaires n'est proposée qu'une fois.
+        const key = `${f.host.toLowerCase()}|${f.port}|${f.username ?? ''}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        const match = existing.find((t) => t.host.toLowerCase() === f.host.toLowerCase() && t.port === f.port)
+        candidates.push({ ...f, id: randomUUID(), existingTargetId: match?.id ?? null })
+      }
+      return { sources, candidates }
+    },
+    probeImports: async (candidates) => {
+      const knownHosts = (() => {
+        try {
+          return readFileSync(join(homedir(), '.ssh', 'known_hosts'), 'utf8')
+        } catch {
+          return ''
+        }
+      })()
+      const probe = async (c: ImportCandidate): Promise<ImportProbe> => {
+        try {
+          const hostKey = await this.remote.probeHostKey(c.host, c.port)
+          const known = knownHostFingerprints(knownHosts, c.host, c.port)
+          return { id: c.id, hostKey, knownHosts: known.length === 0 ? 'unknown' : known.includes(hostKey.fingerprint) ? 'match' : 'mismatch' }
+        } catch (error) {
+          return { id: c.id, knownHosts: 'unknown', error: (error as Error).message }
+        }
+      }
+      // Lecture en parallèle, par lots, pour ne pas saturer le réseau.
+      const results: ImportProbe[] = []
+      for (let i = 0; i < candidates.length; i += 8) results.push(...(await Promise.all(candidates.slice(i, i + 8).map(probe))))
+      return results
+    },
+    importConnections: async (items) => {
+      const result: ImportResult = { added: 0, linkedToProxmox: 0, errors: [] }
+      const guests = this.monitor.state.snapshots.flatMap((s) => s.guests).filter((g) => !g.template)
+      for (const { candidate: c, hostKey, credentialId } of items) {
+        try {
+          if (this.ssh.targets().some((t) => t.host.toLowerCase() === c.host.toLowerCase() && t.port === c.port)) throw new Error('Connexion déjà présente.')
+          let credential = this.ssh.credentials().find((x) => x.id === credentialId)
+          if (credentialId === 'auto-key') {
+            if (!c.keyPath || !c.username) throw new Error('Clé ou utilisateur manquant : choisissez des identifiants.')
+            credential = this.ssh.credentials().find((x) => x.authMethod === 'key' && x.username === c.username && x.privateKeyPath === c.keyPath)
+            if (!credential) {
+              credential = { id: randomUUID(), name: `${c.username} · ${basename(c.keyPath)}`, username: c.username, authMethod: 'key', privateKeyPath: c.keyPath, useSudo: true }
+              this.ssh.upsertCredential(credential)
+            }
+          }
+          if (!credential) throw new Error('Identifiants SSH introuvables.')
+          // Rattachement automatique à l'invité Proxmox du même nom (snapshots avant mise à jour).
+          const guest = guests.find((g) => g.name.toLowerCase() === c.name.toLowerCase())
+          this.ssh.upsertTarget({
+            id: randomUUID(), name: c.name, host: c.host, port: c.port, credentialId: credential.id,
+            hostKeyFingerprint: hostKey.fingerprint, hostKeyAlgorithm: hostKey.algorithm,
+            serverId: guest?.serverId ?? null, node: guest?.node ?? null, vmid: guest?.vmid ?? null, guestKind: guest?.kind ?? null,
+            group: c.group, tags: [c.source === 'ssh-config' ? 'ssh-config' : c.source],
+          })
+          result.added++
+          if (guest) result.linkedToProxmox++
+        } catch (error) {
+          result.errors.push({ name: c.name, message: (error as Error).message })
+        }
+      }
+      this.logger.scope('Connexions').info(`Import : ${result.added} connexion(s) ajoutée(s), ${result.errors.length} ignorée(s)`)
+      return result
     },
     setCredentialSudo: async (id, useSudo) => {
       const credential = this.ssh.credentials().find((c) => c.id === id)
