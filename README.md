@@ -70,6 +70,23 @@ Want to look around first? Start BCenter with `--demo` to explore the interface 
 
 Found a security issue? Please report it privately through [GitHub security advisories](https://github.com/bretazaaa/BCenter/security/advisories/new) rather than a public issue.
 
+## BCenter Server (preview)
+
+BCenter can also run on your homelab as a container, used from any browser: monitoring keeps running when your PC is off, and nothing has to be installed on the client.
+
+```bash
+git clone https://github.com/bretazaaa/BCenter.git && cd BCenter
+docker compose up -d --build
+docker logs bcenter        # shows the one-time setup code
+```
+
+Open `http://<server>:8080`, enter the setup code, then create the administrator account (password + authenticator app code).
+
+- **Do not expose it directly to the Internet.** Use a VPN (Tailscale, WireGuard) or an HTTPS reverse proxy (set `BCENTER_TRUST_PROXY=1`), or provide `BCENTER_TLS_CERT` / `BCENTER_TLS_KEY`.
+- Data and the encryption key live in the `/data` volume (`secret.key`, or `BCENTER_SECRET_KEY` in base64). Back it up: secrets cannot be recovered without it.
+- SSH private keys can be mounted read-only (see `docker-compose.yml`) and referenced by their path in the container.
+- Not yet available in the web version: file upload / download, importing from other tools.
+
 ## Building from source
 
 Requirements: Windows, Node.js 24 and npm.

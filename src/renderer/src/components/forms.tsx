@@ -2,7 +2,7 @@ import { FolderOpen, KeyRound, RefreshCw, ShieldCheck, TerminalSquare } from 'lu
 import { useState } from 'react'
 import type { CredentialDraft, ServerDraft } from '@shared/api'
 import type { CertificateInfo, HostKeyInfo, RemoteSystem, ServerProfile } from '@shared/types'
-import { api } from '../lib/api'
+import { api, isWeb } from '../lib/api'
 import { formatFingerprint } from '../lib/format'
 import { Badge, Callout, Check, Field, Progress, Segmented } from './ui'
 
@@ -275,10 +275,10 @@ export function SshFields({ form, withTest = true }: { form: SshForm; withTest?:
       </Field>
       {form.authMethod === 'key' ? (
         <>
-          <Field label="Fichier de clé privée" hint="OpenSSH ou PEM. Seul le chemin est enregistré ; la clé reste dans votre dossier.">
+          <Field label="Fichier de clé privée" hint={isWeb() ? "Chemin de la clé sur le serveur BCenter : montez votre dossier .ssh dans le conteneur, en lecture seule (voir docker-compose.yml)." : "OpenSSH ou PEM. Seul le chemin est enregistré ; la clé reste dans votre dossier."}>
             <div className="row">
               <input className="input mono grow" value={form.privateKeyPath} onChange={(e) => form.setKeyPath(e.target.value)} placeholder="C:\Users\…\.ssh\id_ed25519" />
-              <button className="btn" onClick={async () => { const p = await api.pickPrivateKey(); if (p) form.setKeyPath(p) }}><FolderOpen size={14} /> Parcourir…</button>
+              {!isWeb() && <button className="btn" onClick={async () => { const p = await api.pickPrivateKey(); if (p) form.setKeyPath(p) }}><FolderOpen size={14} /> Parcourir…</button>}
             </div>
           </Field>
           <Field label="Phrase de passe (facultative)" hint="Chiffrée avec Windows DPAPI.">

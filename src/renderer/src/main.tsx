@@ -2,6 +2,7 @@ import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { DetachSpec } from '@shared/types'
 import { Splash } from './splash/Splash'
+import { WebGate } from './web/WebGate'
 import './styles.css'
 
 // L'écran de démarrage ne charge que lui-même ; l'application et les fenêtres détachées sont chargées à la demande.
@@ -27,5 +28,8 @@ function Root() {
 }
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode><Suspense fallback={null}><Root /></Suspense></StrictMode>,
+  <StrictMode>
+    {/* Navigateur (BCenter Server) : pas de pont Electron, connexion obligatoire avant l'application. */}
+    {window.bcenter ? <Suspense fallback={null}><Root /></Suspense> : <WebGate><Suspense fallback={null}><Root /></Suspense></WebGate>}
+  </StrictMode>,
 )

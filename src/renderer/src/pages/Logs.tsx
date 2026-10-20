@@ -2,7 +2,7 @@ import { Copy, FolderOpen, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { JobHistoryEntry } from '@shared/types'
 import { Card, JobBadge, Segmented } from '../components/ui'
-import { api } from '../lib/api'
+import { api, isWeb } from '../lib/api'
 import { clock, dateTime } from '../lib/format'
 import { useApp } from '../store'
 
@@ -38,7 +38,7 @@ export function LogsPage() {
         <div><h1>Journaux</h1><p>Journal de l’application et historique de maintenance</p></div>
         <div className="actions">
           <Segmented value={tab} onChange={setTab} options={[['app', 'Journal de l’application'], ['jobs', 'Historique de maintenance']]} />
-          <button className="btn" onClick={() => void api.openPath('logs')}><FolderOpen size={14} /> Dossier des journaux</button>
+          {!isWeb() && <button className="btn" onClick={() => void api.openPath('logs')}><FolderOpen size={14} /> Dossier des journaux</button>}
         </div>
       </div>
 

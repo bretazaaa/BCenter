@@ -1,10 +1,11 @@
-import { Download, FolderOpen, HardDrive, KeyRound, Network, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Download, FolderOpen, HardDrive, KeyRound, LogOut, Network, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NAS_KINDS, type AppSettings, type NasProfile, type ServerProfile } from '@shared/types'
 import { confirm } from '../components/dialogs'
 import { CredentialModal, ServerModal } from '../components/modals'
 import { Card, Field, SettingRow, Switch } from '../components/ui'
-import { api } from '../lib/api'
+import { api, isWeb } from '../lib/api'
+import { logout } from '../web/bridge'
 import { NasModal } from './Nas'
 import { attempt, useApp } from '../store'
 
@@ -65,12 +66,14 @@ export function SettingsPage() {
                 <option value="en-US">English (interface en cours de traduction)</option>
               </select>
             </Field>
+            {!isWeb() && <>
             <SettingRow title="Lancer au démarrage de Windows"><Switch checked={draft.startWithWindows} onChange={(v) => patch({ startWithWindows: v })} /></SettingRow>
             <SettingRow title="Démarrer réduit dans la zone de notification"><Switch checked={draft.startMinimized} disabled={!draft.startWithWindows} onChange={(v) => patch({ startMinimized: v })} /></SettingRow>
             <SettingRow title="Continuer en arrière-plan à la fermeture" description="Quitter complètement depuis l’icône de la zone de notification.">
               <Switch checked={draft.minimizeToTray} onChange={(v) => patch({ minimizeToTray: v })} />
             </SettingRow>
             <SettingRow title="Notifications Windows"><Switch checked={draft.notifications} onChange={(v) => patch({ notifications: v })} /></SettingRow>
+            </>}
           </Card>
 
           <Card title="Surveillance et alertes" subtitle="Fréquence d’actualisation et seuils">
@@ -145,6 +148,16 @@ export function SettingsPage() {
             ))}
           </Card>
 
+          {isWeb() ? (
+            <Card title="BCenter Server" subtitle={`Version ${version}`}>
+              <SettingRow title="Session web" description="Interface servie par votre serveur BCenter, protégée par mot de passe et code de validation.">
+                <button className="btn" onClick={() => void logout()}><LogOut size={14} /> Se déconnecter</button>
+              </SettingRow>
+              <SettingRow title="Mises à jour" description="Mettez à jour l’image Docker (docker compose pull && docker compose up -d).">
+                <button className="btn ghost sm" onClick={() => window.open('https://github.com/bretazaaa/BCenter/releases')}>Notes de version</button>
+              </SettingRow>
+            </Card>
+          ) : (
           <Card title="Mises à jour de BCenter" subtitle={`Version installée : ${version}`}>
             <SettingRow title="Vérifier et télécharger automatiquement"><Switch checked={draft.checkForUpdates} onChange={(v) => patch({ checkForUpdates: v })} /></SettingRow>
             <SettingRow title="Installer automatiquement au démarrage" description="La nouvelle version est installée en silence au lancement de BCenter, qui redémarre tout seul. Sinon, elle vous est proposée.">
@@ -163,10 +176,11 @@ export function SettingsPage() {
             </div>
           </Card>
 
+          )}
           <Card title="Données locales" subtitle="Base SQLite, journaux et secrets chiffrés">
             <div className="row">
               <input className="input mono grow" readOnly value={dataDir} />
-              <button className="btn" onClick={() => void api.openPath('data')}><FolderOpen size={14} /> Ouvrir</button>
+              {!isWeb() && <button className="btn" onClick={() => void api.openPath('data')}><FolderOpen size={14} /> Ouvrir</button>}
             </div>
           </Card>
         </div>

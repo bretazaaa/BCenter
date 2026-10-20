@@ -311,7 +311,8 @@ function registerIpc() {
 
   ipcMain.handle('api', async (event, name: keyof BCenterApi, args: unknown[]): Promise<ApiResult<unknown>> => {
     try {
-      const handler = (name in host ? host[name as keyof typeof host] : engine?.api[name as keyof Engine['api']]) as
+      // Propriétés propres uniquement : « constructor », « toString »… ne sont pas des opérations.
+      const handler = (Object.hasOwn(host, name) ? host[name as keyof typeof host] : engine && Object.hasOwn(engine.api, name) ? engine.api[name as keyof Engine['api']] : undefined) as
         | ((...a: unknown[]) => Promise<unknown>)
         | undefined
       if (!handler) throw new Error(`Opération inconnue : ${String(name)}`)

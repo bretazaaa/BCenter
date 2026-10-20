@@ -14,3 +14,6 @@ export const api = new Proxy({} as BCenterApi, {
 export function on<K extends keyof BCenterEvents>(event: K, listener: (payload: BCenterEvents[K]) => void): () => void {
   return window.bcenter.on(event, listener as (payload: unknown) => void)
 }
+
+/** Interface servie par BCenter Server dans un navigateur (et non l'application Windows). */
+export const isWeb = () => window.bcenter?.platform === 'web'

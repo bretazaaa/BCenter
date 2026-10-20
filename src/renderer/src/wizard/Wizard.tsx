@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react'
 import { DEFAULT_SETTINGS, type AppSettings } from '@shared/types'
 import { ServerFields, ServerTest, SshFields, useServerForm, useSshForm } from '../components/forms'
 import { Field, Logo, SettingRow, Switch } from '../components/ui'
-import { api } from '../lib/api'
+import { api, isWeb } from '../lib/api'
 import { useApp } from '../store'
 import './wizard.css'
 
@@ -96,7 +96,7 @@ export function Wizard() {
             </li>
           ))}
         </ol>
-        <p className="faint">Les secrets sont chiffrés avec Windows DPAPI et liés à votre compte Windows.</p>
+        <p className="faint">{isWeb() ? 'Les secrets sont chiffrés (AES-256-GCM) avec la clé propre à votre serveur BCenter.' : 'Les secrets sont chiffrés avec Windows DPAPI et liés à votre compte Windows.'}</p>
       </aside>
 
       <section className="wz-main">
@@ -110,7 +110,7 @@ export function Wizard() {
                   <option value="en-US">English (interface en cours de traduction)</option>
                 </select>
               </Field>
-              <div className="card">
+              {!isWeb() && <div className="card">
                 <SettingRow title="Lancer BCenter au démarrage de Windows" description="Surveillance active dès l’ouverture de votre session.">
                   <Switch checked={settings.startWithWindows} onChange={(v) => patch({ startWithWindows: v })} />
                 </SettingRow>
@@ -123,7 +123,7 @@ export function Wizard() {
                 <SettingRow title="Notifications Windows" description="Alertes critiques et fin des tâches de maintenance.">
                   <Switch checked={settings.notifications} onChange={(v) => patch({ notifications: v })} />
                 </SettingRow>
-              </div>
+              </div>}
             </StepHead>
           )}
           {step === 2 && (
@@ -177,7 +177,7 @@ export function Wizard() {
           {step === 6 && (
             <StepHead title="Tout est prêt" lead="Vérifiez la configuration puis terminez. Vous pourrez tout modifier dans Réglages.">
               <Summary icon={<Settings2 size={17} />} title="Préférences">
-                {settings.language === 'fr-FR' ? 'Français' : 'English'} · {settings.startWithWindows ? 'démarrage avec Windows' : 'démarrage manuel'} · actualisation toutes les {settings.refreshInterval} s
+                {settings.language === 'fr-FR' ? 'Français' : 'English'} · {isWeb() ? '' : settings.startWithWindows ? 'démarrage avec Windows · ' : 'démarrage manuel · '}actualisation toutes les {settings.refreshInterval} s
               </Summary>
               <Summary icon={<Network size={17} />} title="Serveur Proxmox">
                 {serverSkipped || !server.verified ? 'Aucun serveur — vous pourrez l’ajouter plus tard.' : `${server.name} (${server.host}:${server.port}) — ${server.version}`}
@@ -186,7 +186,7 @@ export function Wizard() {
                 {sshSkipped ? 'Non configuré — à faire depuis le centre de mises à jour.' : `${ssh.username} (${ssh.authMethod === 'key' ? 'clé privée' : 'mot de passe'})${ssh.tested && ssh.addTested ? ` — machine ${ssh.testHost} ajoutée` : ''}`}
               </Summary>
               <Summary icon={<ShieldCheck size={17} />} title="Sécurité">
-                Secrets chiffrés par Windows DPAPI · certificats TLS et clés d’hôte SSH vérifiés · snapshot avant mise à jour {settings.snapshotBeforeUpdate ? 'activé' : 'désactivé'}
+                {isWeb() ? 'Secrets chiffrés sur le serveur' : 'Secrets chiffrés par Windows DPAPI'} · certificats TLS et clés d’hôte SSH vérifiés · snapshot avant mise à jour {settings.snapshotBeforeUpdate ? 'activé' : 'désactivé'}
               </Summary>
             </StepHead>
           )}
@@ -228,14 +228,14 @@ function Welcome() {
   const features: [ReactNode, string, string][] = [
     [<Activity size={18} />, 'Supervision en temps réel', 'Nœuds, VM, conteneurs, stockages et métriques historiques.'],
     [<Wrench size={18} />, 'Mises à jour centralisées', 'Analyse et application des mises à jour via SSH, avec snapshot préalable.'],
-    [<Bell size={18} />, 'Alertes et notifications', 'Notifications Windows, même lorsque BCenter est réduit.'],
-    [<ShieldCheck size={18} />, 'Sécurité locale', 'Secrets chiffrés par Windows, certificats et clés SSH vérifiés.'],
+    [<Bell size={18} />, 'Alertes et notifications', isWeb() ? 'Surveillance continue sur le serveur, même navigateur fermé.' : 'Notifications Windows, même lorsque BCenter est réduit.'],
+    [<ShieldCheck size={18} />, 'Sécurité', isWeb() ? 'Connexion avec double authentification, secrets chiffrés, certificats et clés SSH vérifiés.' : 'Secrets chiffrés par Windows, certificats et clés SSH vérifiés.'],
   ]
   return (
     <>
       <div style={{ marginBottom: 18 }}><Logo size={120} variant="full" /></div>
       <h1 style={{ fontSize: 30 }}>Bienvenue sur BCenter</h1>
-      <p className="lead">BCenter centralise la supervision et la maintenance de votre infrastructure Proxmox VE, directement depuis votre PC Windows. Quelques minutes suffisent pour le configurer.</p>
+      <p className="lead">BCenter centralise la supervision et la maintenance de votre infrastructure Proxmox VE, {isWeb() ? 'depuis votre navigateur.' : 'directement depuis votre PC Windows.'} Quelques minutes suffisent pour le configurer.</p>
       <div className="grid halves">
         {features.map(([icon, title, text]) => (
           <div className="card" key={title}>

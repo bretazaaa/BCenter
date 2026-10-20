@@ -3,7 +3,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RemoteFile, SshTarget } from '@shared/types'
-import { api, on } from '../lib/api'
+import { api, isWeb, on } from '../lib/api'
 import { bytes, dateTime } from '../lib/format'
 import { useApp } from '../store'
 import { confirm, useAction } from './dialogs'
@@ -193,7 +193,7 @@ export function FileBrowser({ target, initialPath, onPath }: { target: SshTarget
   const crumbs = path.split('/').filter(Boolean)
   return (
     <div className="file-browser" tabIndex={0} onKeyDown={onKey}
-      onDragOver={(e) => { e.preventDefault(); setDragging(true) }} onDragLeave={(e) => e.currentTarget === e.target && setDragging(false)} onDrop={(e) => void onDrop(e)}>
+      onDragOver={(e) => { e.preventDefault(); if (!isWeb()) setDragging(true) }} onDragLeave={(e) => e.currentTarget === e.target && setDragging(false)} onDrop={(e) => void onDrop(e)}>
       <div className="fb-toolbar">
         <button className="btn ghost sm icon" title="Dossier parent (Retour arrière)" onClick={() => go(parentOf(path))}><ArrowUp size={14} /></button>
         <button className="btn ghost sm icon" title="Dossier personnel" onClick={() => go(homeRef.current)}><Home size={14} /></button>
@@ -208,9 +208,9 @@ export function FileBrowser({ target, initialPath, onPath }: { target: SshTarget
         <span className="sep" />
         <button className="btn ghost sm icon" title="Nouveau dossier" onClick={newFolder}><FolderPlus size={14} /></button>
         <button className="btn ghost sm icon" title="Nouveau fichier" onClick={newFile}><FileText size={14} /></button>
-        <button className="btn ghost sm icon" title="Envoyer des fichiers (ou glissez-les ici)" onClick={() => void run(() => api.fsUpload(fsId!, path, false))}><Upload size={14} /></button>
+        {!isWeb() && <><button className="btn ghost sm icon" title="Envoyer des fichiers (ou glissez-les ici)" onClick={() => void run(() => api.fsUpload(fsId!, path, false))}><Upload size={14} /></button>
         <button className="btn ghost sm icon" title="Envoyer un dossier" onClick={() => void run(() => api.fsUpload(fsId!, path, true))}><FolderUp size={14} /></button>
-        <button className="btn ghost sm icon" title="Télécharger la sélection" disabled={!chosen.length} onClick={() => void download()}><Download size={14} /></button>
+        <button className="btn ghost sm icon" title="Télécharger la sélection" disabled={!chosen.length} onClick={() => void download()}><Download size={14} /></button></>}
         <button className="btn ghost sm icon" title="Renommer (F2)" disabled={chosen.length !== 1} onClick={() => rename(chosen[0])}><Pencil size={14} /></button>
         <button className="btn ghost sm icon" title="Supprimer (Suppr)" disabled={!chosen.length} onClick={() => void remove()}><Trash2 size={14} /></button>
       </div>

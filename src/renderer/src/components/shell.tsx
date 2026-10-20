@@ -1,9 +1,10 @@
 import {
-  Activity, Bell, CheckCircle2, Copy, HardDrive, Info, LayoutDashboard, Minus, Monitor, Network, Plus, RefreshCw, ScrollText,
+  Activity, Bell, CheckCircle2, Copy, HardDrive, Info, LayoutDashboard, LogOut, Minus, Monitor, Network, Plus, RefreshCw, ScrollText,
   Search, Settings, Square, SquareTerminal, Terminal, Wrench, X, XCircle,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { api } from '../lib/api'
+import { api, isWeb } from '../lib/api'
+import { logout } from '../web/bridge'
 import { clock } from '../lib/format'
 import { useApp, type Page } from '../store'
 import { Logo } from './ui'
@@ -44,8 +45,9 @@ export type AddKind = 'server' | 'nas' | 'target'
 
 export function TitleBar({ simple = false, onAdd }: { simple?: boolean; onAdd?: (kind: AddKind) => void }) {
   const { maximized, navigate, refresh, toggleConsole } = useApp()
+  const web = isWeb()
   return (
-    <header className="titlebar" onDoubleClick={(e) => e.target === e.currentTarget && void api.windowToggleMaximize()}>
+    <header className={`titlebar${web ? ' web' : ''}`} onDoubleClick={(e) => !web && e.target === e.currentTarget && void api.windowToggleMaximize()}>
       <div className="brand"><Logo size={20} /> BCenter</div>
       {!simple && (
         <>
@@ -56,8 +58,7 @@ export function TitleBar({ simple = false, onAdd }: { simple?: boolean; onAdd?: 
             { label: 'NAS', kbd: 'Ctrl+5', action: () => navigate('nas') },
             { label: 'Connexions', kbd: 'Ctrl+6', action: () => navigate('connections') },
             { label: 'Actualiser', kbd: 'F5', action: () => void refresh() },
-            'sep',
-            { label: 'Quitter BCenter', action: () => void api.quit() },
+            ...(web ? [] : ['sep' as const, { label: 'Quitter BCenter', action: () => void api.quit() }]),
           ]} />
           <Menu label="Maintenance" items={[
             { label: 'Centre de mises à jour', kbd: 'Ctrl+3', action: () => navigate('updates') },
@@ -66,19 +67,25 @@ export function TitleBar({ simple = false, onAdd }: { simple?: boolean; onAdd?: 
           ]} />
           <Menu label="Affichage" items={[
             { label: 'Afficher / masquer la console', kbd: 'Ctrl+J', action: () => toggleConsole() },
-            { label: 'Dossier des données', action: () => void api.openPath('data') },
-            { label: 'Dossier des journaux', action: () => void api.openPath('logs') },
+            ...(web ? [] : [
+              { label: 'Dossier des données', action: () => void api.openPath('data') },
+              { label: 'Dossier des journaux', action: () => void api.openPath('logs') },
+            ]),
             'sep',
             { label: 'Réglages', kbd: 'Ctrl+,', action: () => navigate('settings') },
           ]} />
         </>
       )}
       <div className="spacer" />
-      <div className="winctl">
-        <button onClick={() => void api.windowMinimize()} aria-label="Réduire"><Minus size={15} /></button>
-        <button onClick={() => void api.windowToggleMaximize()} aria-label="Agrandir">{maximized ? <Copy size={12} /> : <Square size={12} />}</button>
-        <button className="close" onClick={() => void api.windowClose()} aria-label="Fermer"><X size={16} /></button>
-      </div>
+      {web ? (
+        <button className="btn ghost sm" style={{ marginRight: 10 }} title="Se déconnecter de BCenter Server" onClick={() => void logout()}><LogOut size={13} /> Déconnexion</button>
+      ) : (
+        <div className="winctl">
+          <button onClick={() => void api.windowMinimize()} aria-label="Réduire"><Minus size={15} /></button>
+          <button onClick={() => void api.windowToggleMaximize()} aria-label="Agrandir">{maximized ? <Copy size={12} /> : <Square size={12} />}</button>
+          <button className="close" onClick={() => void api.windowClose()} aria-label="Fermer"><X size={16} /></button>
+        </div>
+      )}
     </header>
   )
 }

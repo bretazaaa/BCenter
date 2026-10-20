@@ -5,7 +5,7 @@ import { DialogHost } from './components/dialogs'
 import { FileBrowser } from './components/FileBrowser'
 import { Toasts } from './components/shell'
 import { TerminalPane } from './components/Terminal'
-import { api, on } from './lib/api'
+import { api, isWeb, on } from './lib/api'
 
 /** Fenêtre séparée : un terminal (session reprise depuis la fenêtre principale) ou un gestionnaire de fichiers. */
 export function DetachedWindow({ spec }: { spec: DetachSpec }) {
@@ -41,12 +41,12 @@ export function DetachedWindow({ spec }: { spec: DetachSpec }) {
           <span className="faint mono" style={{ fontWeight: 400, marginLeft: 6 }}>{target ? `${target.host}:${target.port}` : ''}</span>
         </div>
         <div className="spacer" />
-        {target && <button className="btn ghost sm" style={{ marginRight: 8, WebkitAppRegion: 'no-drag' } as React.CSSProperties} title="Ramener dans la fenêtre principale de BCenter" onClick={reattach}><Undo2 size={13} /> Rattacher</button>}
-        <div className="winctl">
+        {target && !isWeb() && <button className="btn ghost sm" style={{ marginRight: 8, WebkitAppRegion: 'no-drag' } as React.CSSProperties} title="Ramener dans la fenêtre principale de BCenter" onClick={reattach}><Undo2 size={13} /> Rattacher</button>}
+        {!isWeb() && <div className="winctl">
           <button onClick={() => void api.windowMinimize()} aria-label="Réduire"><Minus size={15} /></button>
           <button onClick={() => void api.windowToggleMaximize()} aria-label="Agrandir">{maximized ? <Copy size={12} /> : <Square size={12} />}</button>
           <button className="close" onClick={() => void api.windowClose()} aria-label="Fermer"><X size={16} /></button>
-        </div>
+        </div>}
       </header>
       <main className="content" style={{ position: 'relative' }}>
         {error && <div className="error" style={{ padding: 20 }}>{error}</div>}
