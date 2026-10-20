@@ -399,3 +399,12 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; }
   background: rgba(59, 130, 246, 0.12); font-size: 15px; pointer-events: none;
 }
 .input.fb-editor { width: 100%; height: min(62vh, 640px); font-weight: 400; resize: none; padding: 12px; line-height: 1.5; font-size: 12.5px; white-space: pre; tab-size: 2; }
+.tag-pill button { display: inline-flex; margin: 0 -3px 0 4px; padding: 1px; border: 0; background: none; color: inherit; opacity: 0.7; border-radius: 4px; }
+.tag-pill button:hover { opacity: 1; background: rgba(255, 255, 255, 0.08); }
+.tag-input {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 38px; padding: 5px 8px; cursor: text;
+  background: var(--input); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.tag-input:focus-within { border-color: var(--accent); }
+.tag-input input { flex: 1; min-width: 80px; border: 0; outline: none; background: none; color: var(--text); font: inherit; }
+.tag-dot { width: 9px; height: 9px; border-radius: 50%; margin: 0 3px; }

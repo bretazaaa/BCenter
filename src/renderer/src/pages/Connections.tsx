@@ -8,8 +8,9 @@ import { relative } from '../lib/format'
 import { attempt, useApp } from '../store'
 import { ImportModal } from './ImportModal'
 import { AddTargetModal } from './Updates'
+import { TagInput, TagPill, tagColor } from '../components/TagInput'
 
-type Filter = { kind: 'all' } | { kind: 'group'; group: string | null } | { kind: 'suggestions' }
+type Filter = { kind: 'all' } | { kind: 'group'; group: string | null } | { kind: 'tag'; tag: string } | { kind: 'suggestions' }
 type AddRequest = { guest?: GuestInfo; nas?: NasProfile; group?: string | null }
 
 const ALL: Filter = { kind: 'all' }
@@ -36,6 +37,7 @@ export function ConnectionsPage() {
 
   const users = new Map(credentials.map((c) => [c.id, c.username]))
   const groups = useMemo(() => [...new Set(targets.map((t) => t.group).filter((g): g is string => !!g))].sort((a, b) => a.localeCompare(b)), [targets])
+  const allTags = useMemo(() => [...new Set(targets.flatMap((t) => t.tags))].sort((a, b) => a.localeCompare(b)), [targets])
 
   // Invités Proxmox et NAS sans connexion SSH : proposés à la configuration.
   const suggestions = useMemo(() => {
@@ -50,6 +52,7 @@ export function ConnectionsPage() {
   const q = search.trim().toLowerCase()
   const shown = targets.filter((t) => {
     if (filter.kind === 'group' && t.group !== filter.group) return false
+    if (filter.kind === 'tag' && !t.tags.includes(filter.tag)) return false
     return !q || [t.name, t.host, t.group ?? '', ...t.tags].some((v) => v.toLowerCase().includes(q))
   })
 
@@ -92,6 +95,16 @@ export function ConnectionsPage() {
               count={targets.filter((t) => !t.group).length} onClick={() => setFilter({ kind: 'group', group: null })} />
           )}
           <hr style={{ border: 0, borderTop: '1px solid var(--border-soft)', margin: '8px 4px' }} />
+          {allTags.length > 0 && (
+            <>
+              <div className="faint" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', padding: '10px 10px 4px' }}>Tags</div>
+              {allTags.map((tag) => (
+                <FolderButton key={tag} active={filter.kind === 'tag' && filter.tag === tag} icon={<span className="tag-dot" style={{ background: tagColor(tag) }} />} label={tag}
+                  count={targets.filter((t) => t.tags.includes(tag)).length} onClick={() => setFilter({ kind: 'tag', tag })} />
+              ))}
+              <hr style={{ border: 0, borderTop: '1px solid var(--border-soft)', margin: '8px 4px' }} />
+            </>
+          )}
           <FolderButton active={filter.kind === 'suggestions'} icon={<Sparkles size={15} />} label="À configurer" count={suggestionCount} onClick={() => setFilter({ kind: 'suggestions' })} />
         </div>
 
@@ -179,7 +192,7 @@ export function ConnectionsPage() {
       </div>
 
       {importing && <ImportModal onClose={() => setImporting(false)} />}
-      {editing && <EditConnectionModal target={editing} groups={groups} onClose={() => setEditing(null)} />}
+      {editing && <EditConnectionModal target={editing} groups={groups} allTags={allTags} onClose={() => setEditing(null)} />}
       {adding && (
         <AddTargetModal
           guest={adding.guest}
@@ -202,16 +215,16 @@ function FolderButton({ active, icon, label, count, onClick }: { active: boolean
   )
 }
 
-function EditConnectionModal({ target, groups, onClose }: { target: SshTarget; groups: string[]; onClose: () => void }) {
+function EditConnectionModal({ target, groups, allTags, onClose }: { target: SshTarget; groups: string[]; allTags: string[]; onClose: () => void }) {
   const credentials = useApp((s) => s.credentials)
   const [name, setName] = useState(target.name)
   const [group, setGroup] = useState(target.group ?? '')
-  const [tags, setTags] = useState(target.tags.join(', '))
+  const [tags, setTags] = useState(target.tags)
   const [credentialId, setCredentialId] = useState(target.credentialId)
   const { busy, error, run } = useAction()
 
   const save = () => run(async () => {
-    await api.updateTarget(target.id, { name, group: group.trim() || null, tags: tags.split(','), credentialId })
+    await api.updateTarget(target.id, { name, group: group.trim() || null, tags, credentialId })
     await useApp.getState().reloadLists()
     useApp.getState().toast('success', 'Connexion mise à jour.')
     onClose()
@@ -232,7 +245,7 @@ function EditConnectionModal({ target, groups, onClose }: { target: SshTarget; g
             <datalist id="bcenter-edit-groups">{groups.map((g) => <option key={g} value={g} />)}</datalist>
           </Field>
         </div>
-        <div className="grow"><Field label="Tags" hint="Séparés par des virgules."><input className="input" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="web, prod" /></Field></div>
+        <div className="grow"><Field label="Tags" hint="Entrée ou virgule pour ajouter."><TagInput value={tags} onChange={setTags} suggestions={allTags} /></Field></div>
       </div>
       <Field label="Identifiants SSH">
         <select className="select" value={credentialId} onChange={(e) => setCredentialId(e.target.value)}>
@@ -244,17 +257,5 @@ function EditConnectionModal({ target, groups, onClose }: { target: SshTarget; g
         Pour changer d’adresse, supprimez puis recréez la connexion (la clé d’hôte doit être vérifiée à nouveau).
       </div>
     </Modal>
-  )
-}
-
-const TAG_COLORS = ['#3b82f6', '#22d3ee', '#a78bfa', '#22c55e', '#f59e0b', '#f472b6', '#38bdf8', '#fb7185']
-
-/** Tag avec une couleur stable dérivée de son nom. */
-export function TagPill({ tag }: { tag: string }) {
-  let hash = 0
-  for (const ch of tag.toLowerCase()) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0
-  const color = TAG_COLORS[hash % TAG_COLORS.length]
-  return (
-    <span className="tag-pill" style={{ color, background: `${color}1f`, borderColor: `${color}40` }}>{tag}</span>
   )
 }

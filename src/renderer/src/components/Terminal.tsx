@@ -93,8 +93,8 @@ export function TerminalDock() {
         {terminals.map((t) => (
           <div key={t.key} className="pane" style={{ display: t.key === activeTerminal && terminalOpen ? undefined : 'none' }}>
             {t.kind === 'files'
-              ? <FileBrowser target={t.target} onPath={(path) => updateTab(t.key, { path })} />
-              : <TerminalPane target={t.target} active={t.key === activeTerminal && terminalOpen}
+              ? <FileBrowser target={t.target} initialPath={t.path} onPath={(path) => updateTab(t.key, { path })} />
+              : <TerminalPane target={t.target} active={t.key === activeTerminal && terminalOpen} attachSession={t.attach}
                   onSession={(sessionId) => updateTab(t.key, { sessionId })}
                   onState={(s) => setStates((prev) => (prev[t.key] === s ? prev : { ...prev, [t.key]: s }))} />}
           </div>
@@ -142,7 +142,9 @@ export function TerminalPane({ target, active, attachSession, onState, onSession
   const [state, setState] = useState<State>('connecting')
   const [attempt, setAttempt] = useState(0)
 
-  useEffect(() => onState?.(state), [state]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    onState?.(state)
+  }, [state]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const term = new Terminal({ fontFamily: "'Cascadia Mono', Consolas, monospace", fontSize: 13, lineHeight: 1.15, cursorBlink: true, scrollback: 5000, theme: THEME })

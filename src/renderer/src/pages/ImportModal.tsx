@@ -14,6 +14,8 @@ type Step = 'loading' | 'select' | 'probing' | 'review' | 'importing'
  */
 export function ImportModal({ onClose }: { onClose: () => void }) {
   const credentials = useApp((s) => s.credentials)
+  const targets = useApp((s) => s.targets)
+  const groups = useMemo(() => [...new Set(targets.map((t) => t.group).filter((g): g is string => !!g))], [targets])
   const [step, setStep] = useState<Step>('loading')
   const [sources, setSources] = useState<ImportSourceStatus[]>([])
   const [candidates, setCandidates] = useState<ImportCandidate[]>([])
@@ -32,6 +34,7 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
     credentials.find((x) => c.username && x.username === c.username && (!c.keyPath || x.privateKeyPath === c.keyPath))?.id
     ?? (c.keyPath && c.username ? 'auto-key' : c.username ? 'password' : credentials[0]?.id ?? '')
   const passwordOf = (id: string) => passwords[id] || sharedPassword
+  const edit = (id: string, patch: Partial<Pick<ImportCandidate, 'name' | 'group'>>) => setCandidates((list) => list.map((c) => (c.id === id ? { ...c, ...patch } : c)))
 
   useEffect(() => {
     api.discoverImports().then(
@@ -57,7 +60,7 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
   const chosen = candidates.filter((c) => selected.has(c.id))
   const reviewed = chosen.filter((c) => probes[c.id]?.hostKey)
   const needsApproval = reviewed.some((c) => probes[c.id].knownHosts !== 'match')
-  const missingCredential = chosen.some((c) => !creds[c.id] || (creds[c.id] === 'password' && !passwordOf(c.id)))
+  const missingCredential = chosen.some((c) => !c.name.trim() || !creds[c.id] || (creds[c.id] === 'password' && !passwordOf(c.id)))
 
   const toggle = (id: string, on: boolean) => setSelected((s) => {
     const next = new Set(s)
@@ -182,11 +185,20 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
                       return (
                         <tr key={c.id} style={{ opacity: c.existingTargetId ? 0.5 : 1 }}>
                           <td className="w-check"><Check checked={selected.has(c.id)} disabled={!!c.existingTargetId || step === 'probing' || (step !== 'select' && !p?.hostKey)} onChange={(v) => toggle(c.id, v)} /></td>
-                          <td><b>{c.name}</b>{c.existingTargetId && <span className="faint" style={{ marginLeft: 6, fontSize: 12 }}>déjà présente</span>}</td>
+                          <td>
+                            {step === 'select' && !c.existingTargetId
+                              ? <input className="input" style={{ height: 28, minWidth: 130 }} value={c.name} onChange={(e) => edit(c.id, { name: e.target.value })} />
+                              : <b>{c.name}</b>}
+                            {c.existingTargetId && <span className="faint" style={{ marginLeft: 6, fontSize: 12 }}>déjà présente</span>}
+                          </td>
                           <td className="mono faint">{c.host}{c.port !== 22 ? `:${c.port}` : ''}</td>
                           <td className="muted">{c.username ?? '—'}</td>
                           <td className="muted">{IMPORT_SOURCES[c.source].split(' (')[0]}</td>
-                          <td className="muted">{c.group ?? '—'}</td>
+                          <td>
+                            {step === 'select' && !c.existingTargetId
+                              ? <input className="input" style={{ height: 28, minWidth: 110 }} list="import-groups" placeholder="Sans dossier" value={c.group ?? ''} onChange={(e) => edit(c.id, { group: e.target.value || null })} />
+                              : <span className="muted">{c.group ?? '—'}</span>}
+                          </td>
                           <td>
                             <select className="select" style={{ height: 28 }} value={creds[c.id] ?? ''} disabled={!!c.existingTargetId || step !== 'select'}
                               onChange={(e) => setCreds((x) => ({ ...x, [c.id]: e.target.value }))}>
@@ -246,6 +258,7 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
           )}
         </>
       )}
+      <datalist id="import-groups">{[...new Set([...groups, ...candidates.map((c) => c.group).filter((g): g is string => !!g)])].map((g) => <option key={g} value={g} />)}</datalist>
       {addCredential && <CredentialModal onClose={() => setAddCredential(false)} />}
     </Modal>
   )

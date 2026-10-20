@@ -1,4 +1,4 @@
-import { Copy, FolderOpen, Minus, Square, TerminalSquare, X } from 'lucide-react'
+import { Copy, FolderOpen, Minus, Square, TerminalSquare, Undo2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { DetachSpec, SshTarget } from '@shared/types'
 import { DialogHost } from './components/dialogs'
@@ -12,6 +12,9 @@ export function DetachedWindow({ spec }: { spec: DetachSpec }) {
   const [target, setTarget] = useState<SshTarget | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [maximized, setMaximized] = useState(false)
+  const [sessionId, setSessionId] = useState(spec.sessionId)
+  const [path, setPath] = useState(spec.path)
+  const reattach = () => void api.reattach({ ...spec, sessionId: spec.kind === 'shell' ? sessionId : undefined, path })
 
   useEffect(() => {
     api.listTargets().then(
@@ -38,6 +41,7 @@ export function DetachedWindow({ spec }: { spec: DetachSpec }) {
           <span className="faint mono" style={{ fontWeight: 400, marginLeft: 6 }}>{target ? `${target.host}:${target.port}` : ''}</span>
         </div>
         <div className="spacer" />
+        {target && <button className="btn ghost sm" style={{ marginRight: 8, WebkitAppRegion: 'no-drag' } as React.CSSProperties} title="Ramener dans la fenêtre principale de BCenter" onClick={reattach}><Undo2 size={13} /> Rattacher</button>}
         <div className="winctl">
           <button onClick={() => void api.windowMinimize()} aria-label="Réduire"><Minus size={15} /></button>
           <button onClick={() => void api.windowToggleMaximize()} aria-label="Agrandir">{maximized ? <Copy size={12} /> : <Square size={12} />}</button>
@@ -47,8 +51,8 @@ export function DetachedWindow({ spec }: { spec: DetachSpec }) {
       <main className="content" style={{ position: 'relative' }}>
         {error && <div className="error" style={{ padding: 20 }}>{error}</div>}
         {target && (spec.kind === 'files'
-          ? <FileBrowser target={target} initialPath={spec.path} />
-          : <TerminalPane target={target} active attachSession={spec.sessionId} />)}
+          ? <FileBrowser target={target} initialPath={spec.path} onPath={setPath} />
+          : <TerminalPane target={target} active attachSession={spec.sessionId} onSession={setSessionId} onState={(s) => s !== 'open' && s !== 'connecting' && setSessionId(undefined)} />)}
       </main>
       <Toasts />
       <DialogHost />

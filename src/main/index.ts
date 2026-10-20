@@ -223,7 +223,7 @@ function applyStartup(settings: AppSettings) {
 }
 
 function registerIpc() {
-  const host: Pick<BCenterApi, 'windowMinimize' | 'windowToggleMaximize' | 'windowClose' | 'appInfo' | 'openPath' | 'pickPrivateKey' | 'quit' | 'checkAppUpdate' | 'installAppUpdate' | 'saveSettings' | 'fsDownload' | 'fsUpload' | 'openDetached'> = {
+  const host: Pick<BCenterApi, 'windowMinimize' | 'windowToggleMaximize' | 'windowClose' | 'appInfo' | 'openPath' | 'pickPrivateKey' | 'quit' | 'checkAppUpdate' | 'installAppUpdate' | 'saveSettings' | 'fsDownload' | 'fsUpload' | 'openDetached' | 'reattach'> = {
     windowMinimize: async () => BrowserWindow.getFocusedWindow()?.minimize(),
     windowToggleMaximize: async () => {
       const win = BrowserWindow.getFocusedWindow()
@@ -267,6 +267,15 @@ function registerIpc() {
       return engine!.api.fsUploadPaths(fsId, remoteDir, result.filePaths)
     },
     openDetached: async (spec) => openDetached(spec),
+    reattach: async (spec) => {
+      const detached = BrowserWindow.getFocusedWindow()
+      if (!mainWindow || !detached || detached === mainWindow) return
+      // La session passe immédiatement à la fenêtre principale : la fermeture de la fenêtre détachée ne la coupe pas.
+      if (spec.sessionId) own(mainWindow.webContents, 'shell', spec.sessionId)
+      mainWindow.webContents.send('event:reattach', spec)
+      showMain()
+      detached.close()
+    },
     saveSettings: async (settings) => {
       const saved = engine!.settings.save(settings)
       applyStartup(saved)

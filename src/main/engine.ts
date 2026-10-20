@@ -35,7 +35,7 @@ export interface EnginePorts {
 
 export type EngineApi = Omit<
   BCenterApi,
-  'windowMinimize' | 'windowToggleMaximize' | 'windowClose' | 'appInfo' | 'openPath' | 'pickPrivateKey' | 'quit' | 'checkAppUpdate' | 'installAppUpdate' | 'saveSettings' | 'fsDownload' | 'fsUpload' | 'openDetached'
+  'windowMinimize' | 'windowToggleMaximize' | 'windowClose' | 'appInfo' | 'openPath' | 'pickPrivateKey' | 'quit' | 'checkAppUpdate' | 'installAppUpdate' | 'saveSettings' | 'fsDownload' | 'fsUpload' | 'openDetached' | 'reattach'
 >
 
 /** Taille de la fin de sortie conservée par session de terminal (reprise dans une fenêtre détachée). */
@@ -356,10 +356,10 @@ export class Engine {
             credential,
             linked: !!guest,
             target: {
-              id: randomUUID(), name: c.name, host: c.host, port: c.port, credentialId: credential.id,
+              id: randomUUID(), name: c.name.trim() || c.host, host: c.host, port: c.port, credentialId: credential.id,
               hostKeyFingerprint: hostKey.fingerprint, hostKeyAlgorithm: hostKey.algorithm,
               serverId: guest?.serverId ?? null, node: guest?.node ?? null, vmid: guest?.vmid ?? null, guestKind: guest?.kind ?? null,
-              group: c.group, tags: [c.source],
+              group: c.group?.trim() || null, tags: [c.source],
             },
           })
         } catch (error) {

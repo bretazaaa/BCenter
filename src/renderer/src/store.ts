@@ -24,6 +24,8 @@ export interface TerminalTab {
   target: SshTarget
   /** Session SSH du terminal, connue une fois ouverte (permet de la détacher sans la couper). */
   sessionId?: string
+  /** Session existante à reprendre à l'ouverture (rattachement d'une fenêtre détachée). */
+  attach?: string
   /** Dossier courant du gestionnaire de fichiers. */
   path?: string
 }
@@ -121,6 +123,13 @@ export const useApp = create<AppStore>((set, get) => ({
     initialized = true
     on('infra', (infra) => set({ infra }))
     on('nas', (nas) => set({ nas }))
+    on('reattach', (spec) => {
+      const target = get().targets.find((t) => t.id === spec.targetId)
+      if (!target) return
+      const key = `t${++terminalId}`
+      const tab: TerminalTab = spec.kind === 'files' ? { key, kind: 'files', target, path: spec.path } : { key, kind: 'shell', target, attach: spec.sessionId, sessionId: spec.sessionId }
+      set((s) => ({ terminals: [...s.terminals, tab], activeTerminal: key, terminalOpen: true }))
+    })
     on('alerts', (alerts) => set({ alerts }))
     on('maximized', (maximized) => set({ maximized }))
     on('navigate', (target) =>

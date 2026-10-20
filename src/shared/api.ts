@@ -184,6 +184,8 @@ export interface BCenterApi {
 
   /** Ouvre un terminal ou un gestionnaire de fichiers dans une fenêtre séparée. */
   openDetached(spec: DetachSpec): Promise<void>
+  /** Ramène le terminal ou les fichiers d'une fenêtre détachée dans la fenêtre principale, puis ferme la fenêtre détachée. */
+  reattach(spec: DetachSpec): Promise<void>
 
   // NAS
   listNas(): Promise<NasProfile[]>
@@ -221,6 +223,7 @@ export interface BCenterEvents {
   maximized: boolean
   appUpdate: AppUpdateState
   navigate: string
+  reattach: DetachSpec
   shellData: { id: string; data: string }
   shellExit: { id: string }
   fsProgress: { id: string; file: string; transferred: number; total: number }
